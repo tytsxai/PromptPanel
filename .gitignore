@@ -1,0 +1,23 @@
+.DS_Store
+
+# Local docs are maintained in-place but not versioned.
+docs/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+PromptPanel/.deps/
+
+# Xcode / user state
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# Local app data / logs
+PromptPanel/.swiftpm/
+PromptPanel/.build/
+PromptPanel/*.db
+PromptPanel/*.sqlite*
