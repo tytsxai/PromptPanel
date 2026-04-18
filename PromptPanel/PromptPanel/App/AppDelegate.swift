@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             projectRepository: projectRepository,
             entryRepository: entryRepository,
             settingsRepository: settingsRepository,
+            logRepository: logRepository,
             permissionService: permissionService,
             loginItemService: loginItemService
         )

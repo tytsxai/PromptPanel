@@ -262,6 +262,37 @@ struct MainWindowView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
+                GroupBox("最近执行记录") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Text("仅展示最小排障信息，不记录词条正文。")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("刷新") {
+                                viewModel.refreshLogs()
+                            }
+                            Button("清理 30 天前日志") {
+                                viewModel.cleanupLogs()
+                            }
+                        }
+
+                        if viewModel.recentExecutionLogs.isEmpty {
+                            Text("当前还没有执行记录。")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            LazyVStack(spacing: 10) {
+                                ForEach(viewModel.recentExecutionLogs) { log in
+                                    ExecutionLogRow(
+                                        log: log,
+                                        projectName: viewModel.projectName(for: log.projectId)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .padding(20)
         }
@@ -359,6 +390,65 @@ private struct ProjectSidebarRow: View {
                     .foregroundStyle(Color.accentColor)
             }
         }
+    }
+}
+
+private struct ExecutionLogRow: View {
+    let log: ExecutionLog
+    let projectName: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(resultTitle)
+                    .font(.subheadline.weight(.semibold))
+                Text(projectName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(log.createdAt.formatted(date: .abbreviated, time: .standard))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                infoPill("前台应用", value: log.frontAppBundleId ?? "未知")
+                infoPill("权限", value: log.hasAccessibility ? "已授权" : "未授权")
+                infoPill("复制", value: log.clipboardSuccess ? "成功" : "失败")
+                infoPill("自动粘贴", value: log.pasteAttempted ? (log.pasteSuccess ? "成功" : "失败") : "未尝试")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+
+    private var resultTitle: String {
+        switch log.result {
+        case Constants.ExecutionResult.success.rawValue:
+            return "执行成功"
+        case Constants.ExecutionResult.clipboardOnly.rawValue:
+            return "复制兜底"
+        default:
+            return "执行失败"
+        }
+    }
+
+    private func infoPill(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.caption)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.secondary.opacity(0.12)))
     }
 }
 

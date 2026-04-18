@@ -55,6 +55,7 @@ final class MainWindowViewModel: ObservableObject {
 
     @Published private(set) var projects: [Project] = []
     @Published private(set) var entries: [Entry] = []
+    @Published private(set) var recentExecutionLogs: [ExecutionLog] = []
     @Published var selectedProjectId: String = MainWindowViewModel.allProjectsSelection {
         didSet {
             refreshEntries()
@@ -77,6 +78,7 @@ final class MainWindowViewModel: ObservableObject {
     private let projectRepository: ProjectRepository
     private let entryRepository: EntryRepository
     private let settingsRepository: SettingsRepository
+    private let logRepository: LogRepository
     private let permissionService: PermissionService
     private let loginItemService: LoginItemService
     private var cancellables = Set<AnyCancellable>()
@@ -86,6 +88,7 @@ final class MainWindowViewModel: ObservableObject {
         projectRepository: ProjectRepository,
         entryRepository: EntryRepository,
         settingsRepository: SettingsRepository,
+        logRepository: LogRepository,
         permissionService: PermissionService,
         loginItemService: LoginItemService
     ) {
@@ -93,6 +96,7 @@ final class MainWindowViewModel: ObservableObject {
         self.projectRepository = projectRepository
         self.entryRepository = entryRepository
         self.settingsRepository = settingsRepository
+        self.logRepository = logRepository
         self.permissionService = permissionService
         self.loginItemService = loginItemService
 
@@ -115,12 +119,38 @@ final class MainWindowViewModel: ObservableObject {
         refreshPermissionState()
         loadProjects()
         loadEntries()
+        refreshLogs()
     }
 
     func refreshPermissionState() {
         permissionService.refresh()
         hasAccessibilityPermission = permissionService.isAccessibilityGranted
         launchAtLoginEnabled = loginItemService.isEnabled
+    }
+
+    func refreshLogs() {
+        do {
+            recentExecutionLogs = try logRepository.fetchRecent(limit: 50)
+        } catch {
+            PPLogger.execute.error("Failed to load execution logs: \(error.localizedDescription)")
+            recentExecutionLogs = []
+            bannerMessage = "加载执行日志失败。"
+        }
+    }
+
+    func cleanupLogs(olderThanDays days: Int = 30) {
+        do {
+            try logRepository.cleanup(olderThanDays: days)
+            refreshLogs()
+            bannerMessage = "已清理 \(days) 天前的执行日志。"
+        } catch {
+            PPLogger.execute.error("Failed to clean execution logs: \(error.localizedDescription)")
+            bannerMessage = "清理执行日志失败，请重试。"
+        }
+    }
+
+    func projectName(for id: String) -> String {
+        projects.first(where: { $0.id == id })?.name ?? "未知项目"
     }
 
     func requestAccessibilityPermission() {
@@ -337,6 +367,7 @@ final class MainWindowViewModel: ObservableObject {
         NotificationCenter.default.publisher(for: .entriesDidChange)
             .sink { [weak self] _ in
                 self?.loadEntries()
+                self?.refreshLogs()
             }
             .store(in: &cancellables)
 
