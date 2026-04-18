@@ -61,6 +61,11 @@ final class PanelService {
 
     /// Hide the panel.
     func hide() {
+        guard appState.isPanelVisible else {
+            panel?.orderOut(nil)
+            return
+        }
+
         panel?.orderOut(nil)
         appState.isPanelVisible = false
         reactivateTargetApplication()
@@ -113,6 +118,7 @@ final class PanelService {
             return
         }
         _ = targetApplication.activate(options: [])
+        self.targetApplication = nil
     }
 }
 

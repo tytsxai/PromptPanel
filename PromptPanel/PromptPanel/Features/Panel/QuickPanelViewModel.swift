@@ -60,6 +60,9 @@ final class QuickPanelViewModel: ObservableObject {
     func prepareForPresentation() {
         permissionService.refresh()
         statusMessage = permissionService.isAccessibilityGranted ? nil : "当前为仅复制模式，授权后可恢复自动粘贴。"
+        query = ""
+        selectedIndex = 0
+        currentProjectId = appState.effectiveProjectId
         focusToken += 1
         loadProjects()
         refreshEntries()

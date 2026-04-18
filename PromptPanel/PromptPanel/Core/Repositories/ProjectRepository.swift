@@ -97,6 +97,9 @@ final class ProjectRepository {
     /// Migrate all entries from one project to another, then delete the source project.
     func migrateAndDelete(fromId: String, toId: String) throws {
         try dbQueue.write { db in
+            guard fromId != toId else {
+                throw RepositoryError.invalidMigrationTarget
+            }
             guard let source = try Project.fetchOne(db, key: fromId) else {
                 throw RepositoryError.notFound("Source project \(fromId)")
             }
@@ -127,6 +130,7 @@ enum RepositoryError: LocalizedError {
     case notFound(String)
     case cannotDeleteDefault
     case projectNotEmpty(count: Int)
+    case invalidMigrationTarget
 
     var errorDescription: String? {
         switch self {
@@ -136,6 +140,8 @@ enum RepositoryError: LocalizedError {
             return "Cannot delete the default project"
         case .projectNotEmpty(let count):
             return "Project still has \(count) entries. Migrate or delete them first."
+        case .invalidMigrationTarget:
+            return "Migration target must be different from the source project."
         }
     }
 }
