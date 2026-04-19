@@ -51,6 +51,20 @@ struct Entry: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case projectId = "project_id"
+        case title
+        case content
+        case type
+        case isPinned = "is_pinned"
+        case sortOrder = "sort_order"
+        case useCount = "use_count"
+        case lastUsedAt = "last_used_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
 }
 
 // MARK: - GRDB Conformance

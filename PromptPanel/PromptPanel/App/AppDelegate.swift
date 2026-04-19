@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var clipboardService: ClipboardService!
     private var pasteService: PasteService!
     private var loginItemService: LoginItemService!
+    private var storageMaintenanceService: StorageMaintenanceService!
 
     private var executeService: ExecuteService!
     private var entrySearchService: EntrySearchService!
@@ -24,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var trayManager: TrayManager!
     private var hotkeyService: HotkeyService!
     private var toastService: ToastService!
+    private var panelOpenTracker: PanelOpenTracker!
 
     private var quickPanelViewModel: QuickPanelViewModel!
     private var mainWindowViewModel: MainWindowViewModel!
@@ -36,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try wireApplication()
             permissionService.requestPermission()
             refreshPermissionState()
+            presentLaunchRecoveryAlertIfNeeded()
         } catch {
             PPLogger.app.error("Failed to initialize: \(error.localizedDescription)")
             let alert = NSAlert()
@@ -53,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyService?.stop()
+        storageMaintenanceService?.prepareForTermination()
         PPLogger.app.info("Application will terminate")
     }
 
@@ -70,6 +74,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         pasteService = PasteService()
         loginItemService = LoginItemService()
         toastService = ToastService()
+        panelOpenTracker = PanelOpenTracker()
+        storageMaintenanceService = StorageMaintenanceService(
+            dbQueue: databaseManager.dbQueue,
+            logRepository: logRepository,
+            databaseURL: databaseManager.databaseURL
+        )
+
+        do {
+            _ = try storageMaintenanceService.performLaunchMaintenance()
+        } catch {
+            PPLogger.database.error("Launch maintenance failed: \(error.localizedDescription)")
+        }
 
         let currentProjectId = try settingsRepository.getCurrentProjectId()
         let defaultProject = try projectRepository.fetchDefault()
@@ -81,15 +97,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func wireApplication() throws {
-        panelService = PanelService(appState: appState)
+        panelService = PanelService(appState: appState, panelOpenTracker: panelOpenTracker)
         executeService = ExecuteService(
             clipboardService: clipboardService,
             pasteService: pasteService,
             entryRepository: entryRepository,
             logRepository: logRepository,
             permissionService: permissionService,
-            frontApplicationProvider: { [weak self] in
+            targetApplicationProvider: { [weak self] in
                 self?.panelService.targetApplicationBundleId()
+            },
+            currentFrontApplicationProvider: {
+                NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             }
         )
         entrySearchService = EntrySearchService(entryRepository: entryRepository, appState: appState)
@@ -108,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             searchService: entrySearchService,
             executeService: executeService,
             permissionService: permissionService,
+            panelOpenTracker: panelOpenTracker,
             onClosePanel: { [weak self] in
                 self?.panelService.hide()
             }
@@ -120,7 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             settingsRepository: settingsRepository,
             logRepository: logRepository,
             permissionService: permissionService,
-            loginItemService: loginItemService
+            loginItemService: loginItemService,
+            storageMaintenanceService: storageMaintenanceService,
+            launchRecoveryReport: databaseManager.launchRecoveryReport
         )
 
         panelService.contentViewProvider = { [weak self] in
@@ -143,9 +165,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         trayManager.setup()
 
-        hotkeyService = HotkeyService(onTogglePanel: { [weak self] in
-            self?.panelService.toggle()
-        })
+        hotkeyService = HotkeyService(
+            onTogglePanel: { [weak self] in
+                self?.panelService.toggle()
+            },
+            panelOpenTracker: panelOpenTracker
+        )
         hotkeyService.start()
     }
 
@@ -175,6 +200,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func refreshPermissionState() {
         permissionService.refresh()
         appState.hasAccessibilityPermission = permissionService.isAccessibilityGranted
+    }
+
+    private func presentLaunchRecoveryAlertIfNeeded() {
+        guard let report = databaseManager.launchRecoveryReport else {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "已恢复本地数据库可用状态"
+        alert.informativeText = """
+        上次启动时检测到数据库异常，原文件已隔离到：
+        \(report.quarantinedFilesDirectoryURL.path)
+
+        触发原因：
+        \(report.failureDescription)
+
+        请优先检查最近备份，并在主界面的“运行健康”中确认当前数据目录与备份状态。
+        """
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 
     func windowWillClose(_ notification: Notification) {

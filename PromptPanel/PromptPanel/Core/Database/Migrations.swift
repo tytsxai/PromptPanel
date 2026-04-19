@@ -7,6 +7,7 @@ enum Migrations {
     /// Register all migrations with the migrator.
     static func registerAll(_ migrator: inout DatabaseMigrator) {
         registerV1(migrator: &migrator)
+        registerV2ExecutionLogDiagnostics(migrator: &migrator)
     }
 
     // MARK: - V1: Initial Schema
@@ -107,6 +108,18 @@ enum Migrations {
 
             // Persist the default project as current project
             try AppSetting(key: Constants.SettingsKey.currentProjectId, value: defaultProject.id).insert(db)
+        }
+    }
+
+    private static func registerV2ExecutionLogDiagnostics(migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("v2_execution_log_diagnostics") { db in
+            PPLogger.database.info("Running migration: v2_execution_log_diagnostics")
+
+            try db.alter(table: "execution_logs") { t in
+                t.add(column: "observed_app_bundle_id", .text)
+                t.add(column: "failure_reason", .text)
+                t.add(column: "total_duration_ms", .integer)
+            }
         }
     }
 }

@@ -5,25 +5,30 @@ import ApplicationServices
 /// Requires Accessibility permission.
 final class PasteService {
 
+    enum PasteDispatchResult {
+        case dispatched
+        case accessibilityNotGranted
+        case eventCreationFailed
+    }
+
     /// Attempt to auto-paste by simulating Cmd+V.
-    /// - Returns: true if the paste events were sent successfully.
-    func attemptPaste() -> Bool {
+    func attemptPaste() -> PasteDispatchResult {
         guard checkAccessibility() else {
             PPLogger.paste.warning("Accessibility permission not granted; cannot auto-paste")
-            return false
+            return .accessibilityNotGranted
         }
 
         // Create a Cmd+V key down event
         guard let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0x09, keyDown: true) else {
             PPLogger.paste.error("Failed to create key down event")
-            return false
+            return .eventCreationFailed
         }
         keyDownEvent.flags = .maskCommand
 
         // Create a Cmd+V key up event
         guard let keyUpEvent = CGEvent(keyboardEventSource: nil, virtualKey: 0x09, keyDown: false) else {
             PPLogger.paste.error("Failed to create key up event")
-            return false
+            return .eventCreationFailed
         }
         keyUpEvent.flags = .maskCommand
 
@@ -31,8 +36,8 @@ final class PasteService {
         keyDownEvent.post(tap: .cghidEventTap)
         keyUpEvent.post(tap: .cghidEventTap)
 
-        PPLogger.paste.info("Auto-paste Cmd+V events sent")
-        return true
+        PPLogger.paste.info("Auto-paste Cmd+V events dispatched")
+        return .dispatched
     }
 
     /// Check if accessibility permission is granted.

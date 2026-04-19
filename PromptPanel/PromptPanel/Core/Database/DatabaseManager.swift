@@ -3,43 +3,62 @@ import GRDB
 
 /// Manages the SQLite database lifecycle: creation, migration, and access.
 final class DatabaseManager {
+    enum InitializationError: LocalizedError {
+        case migrationFailedPreservingStore(underlying: Error, databaseURL: URL)
+
+        var errorDescription: String? {
+            switch self {
+            case .migrationFailedPreservingStore(let underlying, let databaseURL):
+                return """
+                本地数据库升级失败，已保留原始数据文件，未执行自动重建。
+                数据库位置：\(databaseURL.path)
+                具体错误：\(underlying.localizedDescription)
+                """
+            }
+        }
+    }
 
     /// The shared database queue for all read/write operations.
     let dbQueue: DatabaseQueue
+    let databaseURL: URL
+    private(set) var launchRecoveryReport: LaunchRecoveryReport?
 
     /// Initialize with a database at the specified URL.
     /// - Parameter url: Path to the SQLite database file. If nil, uses the default path.
     init(url: URL? = nil) throws {
         let databaseURL = url ?? Constants.databaseURL
+        self.databaseURL = databaseURL
         PPLogger.database.info("Opening database at \(databaseURL.path)")
 
-        // Ensure the parent directory exists
-        let directory = databaseURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        // Configure the database
-        var config = Configuration()
-        #if DEBUG
-        config.prepareDatabase { db in
-            db.trace { PPLogger.database.debug("\($0)") }
-        }
-        #endif
-
-        dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: config)
-
-        // Enable WAL mode for better read/write concurrency
-        try dbQueue.write { db in
-            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        do {
+            dbQueue = try Self.openDatabase(at: databaseURL)
+        } catch {
+            PPLogger.database.error("Database open failed: \(error.localizedDescription)")
+            if Self.storeExists(at: databaseURL) {
+                let report = try Self.quarantineBrokenStore(at: databaseURL, failureDescription: error.localizedDescription)
+                launchRecoveryReport = report
+                dbQueue = try Self.openDatabase(at: databaseURL)
+                PPLogger.database.warning("Recovered by recreating the database after quarantining the broken store at \(report.quarantinedFilesDirectoryURL.path)")
+            } else {
+                throw error
+            }
         }
 
-        // Run migrations
-        try runMigrations()
+        do {
+            try Self.prepareDatabase(dbQueue, at: databaseURL)
+        } catch {
+            PPLogger.database.error("Database preparation failed without automatic recovery: \(error.localizedDescription)")
+            throw InitializationError.migrationFailedPreservingStore(
+                underlying: error,
+                databaseURL: databaseURL
+            )
+        }
 
         PPLogger.database.info("Database initialized successfully")
     }
 
     /// Run all database migrations in order.
-    private func runMigrations() throws {
+    private static func runMigrations(on dbQueue: DatabaseQueue) throws {
         var migrator = DatabaseMigrator()
 
         // Always re-run migrations in development to catch issues early
@@ -54,5 +73,85 @@ final class DatabaseManager {
         try migrator.migrate(dbQueue)
 
         PPLogger.database.info("Migrations completed")
+    }
+
+    private static func openDatabase(at databaseURL: URL) throws -> DatabaseQueue {
+        let fileManager = FileManager.default
+        let directory = databaseURL.deletingLastPathComponent()
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: Constants.secureDirectoryPermissions]
+        )
+        try fileManager.setAttributes([.posixPermissions: Constants.secureDirectoryPermissions], ofItemAtPath: directory.path)
+
+        var config = Configuration()
+        #if DEBUG
+        config.prepareDatabase { db in
+            db.trace { PPLogger.database.debug("\($0)") }
+        }
+        #endif
+
+        let dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: config)
+        return dbQueue
+    }
+
+    private static func prepareDatabase(_ dbQueue: DatabaseQueue, at databaseURL: URL) throws {
+        let fileManager = FileManager.default
+        try dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        }
+        try runMigrations(on: dbQueue)
+
+        if fileManager.fileExists(atPath: databaseURL.path) {
+            try fileManager.setAttributes([.posixPermissions: Constants.secureFilePermissions], ofItemAtPath: databaseURL.path)
+        }
+    }
+
+    private static func storeExists(at databaseURL: URL) -> Bool {
+        let fileManager = FileManager.default
+        let candidateURLs = storeFileURLs(for: databaseURL)
+        return candidateURLs.contains { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private static func quarantineBrokenStore(at databaseURL: URL, failureDescription: String) throws -> LaunchRecoveryReport {
+        let fileManager = FileManager.default
+        let recoveryRootURL = Constants.recoveryDirectory(for: databaseURL)
+        try fileManager.createDirectory(
+            at: recoveryRootURL,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: Constants.secureDirectoryPermissions]
+        )
+        try fileManager.setAttributes([.posixPermissions: Constants.secureDirectoryPermissions], ofItemAtPath: recoveryRootURL.path)
+
+        let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let quarantineDirectoryURL = recoveryRootURL.appendingPathComponent("recovered-\(timestamp)", isDirectory: true)
+        try fileManager.createDirectory(
+            at: quarantineDirectoryURL,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: Constants.secureDirectoryPermissions]
+        )
+        try fileManager.setAttributes([.posixPermissions: Constants.secureDirectoryPermissions], ofItemAtPath: quarantineDirectoryURL.path)
+
+        for sourceURL in storeFileURLs(for: databaseURL) where fileManager.fileExists(atPath: sourceURL.path) {
+            let destinationURL = quarantineDirectoryURL.appendingPathComponent(sourceURL.lastPathComponent)
+            try? fileManager.removeItem(at: destinationURL)
+            try fileManager.moveItem(at: sourceURL, to: destinationURL)
+            try fileManager.setAttributes([.posixPermissions: Constants.secureFilePermissions], ofItemAtPath: destinationURL.path)
+        }
+
+        return LaunchRecoveryReport(
+            quarantinedFilesDirectoryURL: quarantineDirectoryURL,
+            recoveredAt: Date(),
+            failureDescription: failureDescription
+        )
+    }
+
+    private static func storeFileURLs(for databaseURL: URL) -> [URL] {
+        [
+            databaseURL,
+            URL(fileURLWithPath: databaseURL.path + "-wal"),
+            URL(fileURLWithPath: databaseURL.path + "-shm")
+        ]
     }
 }

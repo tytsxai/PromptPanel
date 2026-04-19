@@ -9,31 +9,43 @@ final class PanelService {
     private var panelDelegate: PanelDelegate?
     private var targetApplication: NSRunningApplication?
     private let appState: AppState
+    private let panelVisibilityCoordinator = PanelVisibilityCoordinator()
+    private let panelOpenTracker: PanelOpenTracker?
 
     /// Callback to create the panel content view.
     var contentViewProvider: (() -> NSView)?
     var onWillShow: (() -> Void)?
 
-    init(appState: AppState) {
+    init(appState: AppState, panelOpenTracker: PanelOpenTracker? = nil) {
         self.appState = appState
+        self.panelOpenTracker = panelOpenTracker
     }
 
     /// Toggle panel visibility.
     func toggle() {
-        if appState.isPanelVisible {
-            hide()
-        } else {
+        switch panelVisibilityCoordinator.toggleAction() {
+        case .show:
             show()
+        case .hide:
+            hide()
         }
     }
 
     /// Show the panel.
     func show() {
+        guard panelVisibilityCoordinator.beginShow() else {
+            PPLogger.panel.debug("Panel show ignored because state is already \(String(describing: self.panelVisibilityCoordinator.state))")
+            return
+        }
+
         if panel == nil {
             createPanel()
         }
 
-        guard let panel = panel else { return }
+        guard let panel = panel else {
+            panelVisibilityCoordinator.finishHide()
+            return
+        }
 
         if let frontmostApplication = NSWorkspace.shared.frontmostApplication,
            frontmostApplication.bundleIdentifier != Bundle.main.bundleIdentifier {
@@ -56,18 +68,23 @@ final class PanelService {
         panel.orderFrontRegardless()
 
         appState.isPanelVisible = true
+        panelVisibilityCoordinator.finishShow()
+        panelOpenTracker?.markPanelShown()
         PPLogger.panel.info("Panel shown")
     }
 
     /// Hide the panel.
     func hide() {
-        guard appState.isPanelVisible else {
-            panel?.orderOut(nil)
+        guard panelVisibilityCoordinator.beginHide() else {
             return
         }
 
         panel?.orderOut(nil)
         appState.isPanelVisible = false
+        panelVisibilityCoordinator.finishHide()
+        if panelOpenTracker?.currentTrace?.searchFieldFocusedAt == nil {
+            panelOpenTracker?.cancelCurrentTrace(reason: "panel_hidden_before_focus")
+        }
         reactivateTargetApplication()
         PPLogger.panel.info("Panel hidden")
     }
