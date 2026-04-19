@@ -263,6 +263,55 @@ struct MainWindowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                GroupBox("运行健康") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        LabeledContent("当前版本", value: appVersionText)
+                        if let snapshot = viewModel.storageHealthSnapshot {
+                            LabeledContent("数据库文件", value: snapshot.databaseURL.path)
+                            LabeledContent("数据库大小", value: byteCountText(snapshot.databaseSizeBytes))
+                            LabeledContent("备份目录", value: snapshot.backupDirectoryURL.path)
+                            LabeledContent("恢复隔离目录", value: snapshot.recoveryDirectoryURL.path)
+                            LabeledContent("日志目录", value: snapshot.logsDirectoryURL.path)
+                            LabeledContent("最近备份", value: latestBackupText(snapshot.latestBackupURL))
+                            LabeledContent("备份数量", value: "\(snapshot.backupCount) / \(Constants.automaticBackupRetentionCount)")
+                        }
+
+                        if let summary = viewModel.executionHealthSummary {
+                            HStack(spacing: 12) {
+                                summaryPill("近 7 天执行", value: "\(summary.totalCount)")
+                                summaryPill("成功", value: "\(summary.successCount)")
+                                summaryPill("复制兜底", value: "\(summary.clipboardOnlyCount)")
+                                summaryPill("失败", value: "\(summary.failedCount)")
+                            }
+
+                            HStack(spacing: 12) {
+                                LabeledContent("最近执行", value: formattedDate(summary.latestExecutionAt))
+                                LabeledContent("最近异常", value: formattedDate(summary.latestFailureAt))
+                            }
+                        }
+
+                        HStack(spacing: 12) {
+                            Button("立即备份") {
+                                viewModel.createBackupNow()
+                            }
+                            Button("打开数据目录") {
+                                viewModel.openDataDirectory()
+                            }
+                            Button("打开备份目录") {
+                                viewModel.openBackupDirectory()
+                            }
+                            Button("刷新健康状态") {
+                                viewModel.refreshOperationalStatus()
+                            }
+                        }
+
+                        Text("自动更新当前未接入，生产发布请按本地 runbook 走“备份 -> 替换安装包 -> 回归 -> 保留最近 7 份备份”的手动流程。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 GroupBox("最近执行记录") {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
@@ -367,6 +416,45 @@ struct MainWindowView: View {
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private var appVersionText: String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "未知"
+        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "未知"
+        return "\(shortVersion) (\(buildVersion))"
+    }
+
+    private func latestBackupText(_ url: URL?) -> String {
+        guard let url else {
+            return "暂无"
+        }
+        let modifiedAt = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        let timestamp = modifiedAt?.formatted(date: .abbreviated, time: .shortened) ?? "未知时间"
+        return "\(url.lastPathComponent) · \(timestamp)"
+    }
+
+    private func formattedDate(_ date: Date?) -> String {
+        guard let date else {
+            return "暂无"
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func byteCountText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private func summaryPill(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.secondary.opacity(0.12)))
+    }
 }
 
 private struct ProjectSidebarRow: View {
@@ -412,10 +500,20 @@ private struct ExecutionLogRow: View {
             }
 
             HStack(spacing: 12) {
-                infoPill("前台应用", value: log.frontAppBundleId ?? "未知")
+                infoPill("目标应用", value: log.frontAppBundleId ?? "未知")
+                if let observedAppTitle {
+                    infoPill("粘贴前前台", value: observedAppTitle)
+                }
                 infoPill("权限", value: log.hasAccessibility ? "已授权" : "未授权")
                 infoPill("复制", value: log.clipboardSuccess ? "成功" : "失败")
                 infoPill("自动粘贴", value: log.pasteAttempted ? (log.pasteSuccess ? "成功" : "失败") : "未尝试")
+                if let durationText {
+                    infoPill("耗时", value: durationText)
+                }
+            }
+
+            if let failureReasonTitle {
+                infoPill("失败原因", value: failureReasonTitle)
             }
         }
         .padding(12)
@@ -437,6 +535,42 @@ private struct ExecutionLogRow: View {
         }
     }
 
+    private var observedAppTitle: String? {
+        guard let observedAppBundleId = log.observedAppBundleId else {
+            return nil
+        }
+        guard observedAppBundleId != log.frontAppBundleId else {
+            return nil
+        }
+        return observedAppBundleId
+    }
+
+    private var durationText: String? {
+        guard let totalDurationMs = log.totalDurationMs else {
+            return nil
+        }
+        return "\(totalDurationMs) ms"
+    }
+
+    private var failureReasonTitle: String? {
+        guard let failureReason = log.failureReason else {
+            return nil
+        }
+
+        switch failureReason {
+        case Constants.ExecutionFailureReason.clipboardWriteFailed.rawValue:
+            return "剪贴板写入失败"
+        case Constants.ExecutionFailureReason.accessibilityNotGranted.rawValue:
+            return "辅助功能权限未授权"
+        case Constants.ExecutionFailureReason.targetAppNotRestored.rawValue:
+            return "原目标应用未恢复前台"
+        case Constants.ExecutionFailureReason.pasteEventCreationFailed.rawValue:
+            return "自动粘贴事件创建失败"
+        default:
+            return "未分类"
+        }
+    }
+
     private func infoPill(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -445,6 +579,7 @@ private struct ExecutionLogRow: View {
             Text(value)
                 .font(.caption)
                 .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

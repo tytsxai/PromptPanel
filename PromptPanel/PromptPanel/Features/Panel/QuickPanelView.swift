@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 struct QuickPanelView: View {
@@ -25,9 +26,6 @@ struct QuickPanelView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         )
-        .onAppear {
-            viewModel.prepareForPresentation()
-        }
     }
 
     private var header: some View {
@@ -46,7 +44,7 @@ struct QuickPanelView: View {
 
                 Spacer()
 
-                Text("⌥Space 呼出")
+                Text(hotkeyHintText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -60,7 +58,8 @@ struct QuickPanelView: View {
                 focusToken: viewModel.focusToken,
                 onMoveSelection: viewModel.moveSelection,
                 onSubmit: viewModel.executeSelection,
-                onEscape: viewModel.closePanel
+                onEscape: viewModel.closePanel,
+                onFocusResolved: viewModel.handleSearchFieldFocus
             )
             .frame(height: 34)
         }
@@ -190,5 +189,12 @@ struct QuickPanelView: View {
         content
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hotkeyHintText: String {
+        if let shortcut = KeyboardShortcuts.Name.togglePanel.shortcut {
+            return "\(shortcut) 呼出"
+        }
+        return "未设置快捷键"
     }
 }

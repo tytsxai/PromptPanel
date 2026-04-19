@@ -56,6 +56,8 @@ final class MainWindowViewModel: ObservableObject {
     @Published private(set) var projects: [Project] = []
     @Published private(set) var entries: [Entry] = []
     @Published private(set) var recentExecutionLogs: [ExecutionLog] = []
+    @Published private(set) var storageHealthSnapshot: StorageHealthSnapshot?
+    @Published private(set) var executionHealthSummary: LogRepository.HealthSummary?
     @Published var selectedProjectId: String = MainWindowViewModel.allProjectsSelection {
         didSet {
             refreshEntries()
@@ -81,6 +83,8 @@ final class MainWindowViewModel: ObservableObject {
     private let logRepository: LogRepository
     private let permissionService: PermissionService
     private let loginItemService: LoginItemService
+    private let storageMaintenanceService: StorageMaintenanceService
+    private let launchRecoveryReport: LaunchRecoveryReport?
     private var cancellables = Set<AnyCancellable>()
 
     init(
@@ -90,7 +94,9 @@ final class MainWindowViewModel: ObservableObject {
         settingsRepository: SettingsRepository,
         logRepository: LogRepository,
         permissionService: PermissionService,
-        loginItemService: LoginItemService
+        loginItemService: LoginItemService,
+        storageMaintenanceService: StorageMaintenanceService,
+        launchRecoveryReport: LaunchRecoveryReport?
     ) {
         self.appState = appState
         self.projectRepository = projectRepository
@@ -99,6 +105,8 @@ final class MainWindowViewModel: ObservableObject {
         self.logRepository = logRepository
         self.permissionService = permissionService
         self.loginItemService = loginItemService
+        self.storageMaintenanceService = storageMaintenanceService
+        self.launchRecoveryReport = launchRecoveryReport
 
         observeChanges()
     }
@@ -120,6 +128,10 @@ final class MainWindowViewModel: ObservableObject {
         loadProjects()
         loadEntries()
         refreshLogs()
+        refreshOperationalStatus()
+        if let launchRecoveryReport {
+            bannerMessage = launchRecoveryReport.userFacingMessage
+        }
     }
 
     func refreshPermissionState() {
@@ -138,10 +150,22 @@ final class MainWindowViewModel: ObservableObject {
         }
     }
 
+    func refreshOperationalStatus() {
+        do {
+            storageHealthSnapshot = try storageMaintenanceService.healthSnapshot()
+            let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date.distantPast
+            executionHealthSummary = try logRepository.fetchHealthSummary(since: cutoff)
+        } catch {
+            PPLogger.database.error("Failed to refresh operational status: \(error.localizedDescription)")
+            bannerMessage = "加载运行健康信息失败。"
+        }
+    }
+
     func cleanupLogs(olderThanDays days: Int = 30) {
         do {
             try logRepository.cleanup(olderThanDays: days)
             refreshLogs()
+            refreshOperationalStatus()
             bannerMessage = "已清理 \(days) 天前的执行日志。"
         } catch {
             PPLogger.execute.error("Failed to clean execution logs: \(error.localizedDescription)")
@@ -164,12 +188,42 @@ final class MainWindowViewModel: ObservableObject {
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
-        if enabled {
-            loginItemService.enable()
-        } else {
-            loginItemService.disable()
+        do {
+            if enabled {
+                try loginItemService.enable()
+            } else {
+                try loginItemService.disable()
+            }
+            launchAtLoginEnabled = loginItemService.isEnabled
+            if launchAtLoginEnabled == enabled {
+                bannerMessage = enabled ? "已启用登录时启动。" : "已关闭登录时启动。"
+            } else {
+                bannerMessage = enabled ? "系统尚未启用登录时启动，请检查系统设置。" : "系统尚未关闭登录时启动，请检查系统设置。"
+            }
+        } catch {
+            PPLogger.loginItem.error("Failed to update login item state: \(error.localizedDescription)")
+            launchAtLoginEnabled = loginItemService.isEnabled
+            bannerMessage = enabled ? "启用登录时启动失败，请重试。" : "关闭登录时启动失败，请重试。"
         }
-        launchAtLoginEnabled = loginItemService.isEnabled
+    }
+
+    func createBackupNow() {
+        do {
+            let backupURL = try storageMaintenanceService.createManualBackup()
+            refreshOperationalStatus()
+            bannerMessage = "已创建备份：\(backupURL.lastPathComponent)"
+        } catch {
+            PPLogger.database.error("Failed to create manual backup: \(error.localizedDescription)")
+            bannerMessage = "创建备份失败，请稍后重试。"
+        }
+    }
+
+    func openDataDirectory() {
+        storageMaintenanceService.openDatabaseDirectory()
+    }
+
+    func openBackupDirectory() {
+        storageMaintenanceService.openBackupDirectory()
     }
 
     func setCurrentProjectToSelected() {

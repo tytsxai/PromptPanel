@@ -19,6 +19,7 @@ final class QuickPanelViewModel: ObservableObject {
     @Published var selectedIndex: Int = 0
     @Published var focusToken: Int = 0
     @Published var statusMessage: String?
+    private(set) var isExecutionReady: Bool = false
 
     private let appState: AppState
     private let projectRepository: ProjectRepository
@@ -26,6 +27,7 @@ final class QuickPanelViewModel: ObservableObject {
     private let searchService: EntrySearchService
     private let executeService: ExecuteService
     private let permissionService: PermissionService
+    private let panelOpenTracker: PanelOpenTracker?
     private let onClosePanel: () -> Void
     private var cancellables = Set<AnyCancellable>()
 
@@ -36,6 +38,7 @@ final class QuickPanelViewModel: ObservableObject {
         searchService: EntrySearchService,
         executeService: ExecuteService,
         permissionService: PermissionService,
+        panelOpenTracker: PanelOpenTracker? = nil,
         onClosePanel: @escaping () -> Void
     ) {
         self.appState = appState
@@ -44,6 +47,7 @@ final class QuickPanelViewModel: ObservableObject {
         self.searchService = searchService
         self.executeService = executeService
         self.permissionService = permissionService
+        self.panelOpenTracker = panelOpenTracker
         self.onClosePanel = onClosePanel
         self.currentProjectId = appState.effectiveProjectId
 
@@ -63,9 +67,18 @@ final class QuickPanelViewModel: ObservableObject {
         query = ""
         selectedIndex = 0
         currentProjectId = appState.effectiveProjectId
+        isExecutionReady = false
         focusToken += 1
         loadProjects()
         refreshEntries()
+    }
+
+    func handleSearchFieldFocus(_ result: PanelFocusResult) {
+        guard result.token == focusToken else {
+            return
+        }
+        panelOpenTracker?.markSearchFieldFocused(result)
+        scheduleExecutionUnlock(for: result.token)
     }
 
     func closePanel() {
@@ -93,6 +106,10 @@ final class QuickPanelViewModel: ObservableObject {
     }
 
     func executeSelection() {
+        guard isExecutionReady else {
+            PPLogger.panel.warning("Ignored executeSelection because panel is not ready for execution yet")
+            return
+        }
         guard let entry = selectedEntry else {
             return
         }
@@ -167,6 +184,20 @@ final class QuickPanelViewModel: ObservableObject {
             entries = []
             selectedIndex = 0
             statusMessage = "搜索失败，请稍后重试。"
+        }
+    }
+
+    private func scheduleExecutionUnlock(for token: Int) {
+        isExecutionReady = false
+        let delay = Double(Constants.panelExecutionUnlockDelayMs) / 1000
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else {
+                return
+            }
+            guard self.focusToken == token else {
+                return
+            }
+            self.isExecutionReady = true
         }
     }
 }
