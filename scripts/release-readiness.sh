@@ -26,6 +26,7 @@ Runs the local release-readiness checks for PromptPanel:
   4. build a release .app and zip
   5. verify code signatures
   6. smoke-launch the built app with isolated data directories
+  7. hand off the signed archive to notarization via scripts/notarize-app.sh when needed
 
 Options:
   --output-dir <path>          Output directory for the release bundle.
@@ -118,6 +119,7 @@ mkdir -p "$OUTPUT_ROOT"
 
 log_info "Validating shell scripts"
 zsh -n "${REPO_ROOT}/scripts/build-app.sh"
+zsh -n "${REPO_ROOT}/scripts/notarize-app.sh"
 zsh -n "${REPO_ROOT}/scripts/restore-backup.sh"
 zsh -n "${REPO_ROOT}/scripts/release-readiness.sh"
 
@@ -207,6 +209,7 @@ if [[ $SKIP_SMOKE_LAUNCH -eq 0 ]]; then
     trap 'cleanup_unpack; cleanup_smoke' EXIT
 
     env \
+        PROMPTPANEL_ALLOW_EXISTING_INSTANCE=1 \
         PROMPTPANEL_APP_SUPPORT_DIR="$APP_SUPPORT_DIR" \
         PROMPTPANEL_LOGS_DIR="$LOGS_DIR" \
         "$APP_BINARY" >"$APP_LOG" 2>&1 &
@@ -248,5 +251,5 @@ fi
 
 log_info "Checks completed successfully"
 if [[ $PUBLIC_DISTRIBUTION -eq 1 ]]; then
-    log_warn "Public distribution precheck passed, but notarization and staple still need to be completed separately."
+    log_warn "Public distribution precheck passed. Next run scripts/notarize-app.sh with the signed app, archive, and notarytool keychain profile."
 fi

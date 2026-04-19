@@ -89,6 +89,51 @@ echo "Building ${APP_NAME} (${CONFIGURATION})..."
 swift build --package-path "$PACKAGE_ROOT" -c "$CONFIGURATION"
 BIN_DIR="$(swift build --package-path "$PACKAGE_ROOT" -c "$CONFIGURATION" --show-bin-path)"
 
+codesign_path() {
+    local target_path="$1"
+    local runtime_mode="${2:-off}"
+    local args=(--force)
+
+    if [[ "$SIGN_IDENTITY" == "none" ]]; then
+        args+=(--sign -)
+    else
+        args+=(--timestamp --sign "$SIGN_IDENTITY")
+        if [[ "$runtime_mode" == "runtime" ]]; then
+            args+=(--options runtime)
+        fi
+    fi
+
+    codesign "${args[@]}" "$target_path"
+}
+
+sign_framework_contents() {
+    local framework_path="$1"
+    local helper_paths=()
+    local helper_path
+
+    while IFS= read -r helper_path; do
+        helper_paths+=("$helper_path")
+    done < <(
+        {
+            find "$framework_path" -mindepth 1 -type d \( -name '*.app' -o -name '*.xpc' -o -name '*.framework' \) -print
+            find "$framework_path" -mindepth 1 -type f \( -name '*.dylib' -o -name 'Autoupdate' \) -print
+        } | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
+    )
+
+    for helper_path in "${helper_paths[@]}"; do
+        case "$helper_path" in
+            *.app|*.xpc|*/Autoupdate)
+                codesign_path "$helper_path" runtime
+                ;;
+            *)
+                codesign_path "$helper_path"
+                ;;
+        esac
+    done
+
+    codesign_path "$framework_path"
+}
+
 APP_PATH="${OUTPUT_ROOT}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_PATH}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
@@ -136,24 +181,19 @@ if [[ -n "$(find "$FRAMEWORKS_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; th
     fi
 fi
 
-if [[ "$SIGN_IDENTITY" == "none" ]]; then
-    for framework_path in "${FRAMEWORKS_DIR}"/*.framework(N); do
-        codesign --force --sign - "$framework_path"
-    done
-    for dylib_path in "${FRAMEWORKS_DIR}"/*.dylib(N); do
-        codesign --force --sign - "$dylib_path"
-    done
-    codesign --force --sign - "${APP_PATH}"
-elif [[ "$SIGN_IDENTITY" != "none" ]]; then
+for framework_path in "${FRAMEWORKS_DIR}"/*.framework(N); do
+    sign_framework_contents "$framework_path"
+done
+
+for dylib_path in "${FRAMEWORKS_DIR}"/*.dylib(N); do
+    codesign_path "$dylib_path"
+done
+
+if [[ "$SIGN_IDENTITY" != "none" ]]; then
     echo "Signing app with identity: ${SIGN_IDENTITY}"
-    for framework_path in "${FRAMEWORKS_DIR}"/*.framework(N); do
-        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$framework_path"
-    done
-    for dylib_path in "${FRAMEWORKS_DIR}"/*.dylib(N); do
-        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dylib_path"
-    done
-    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "${APP_PATH}"
 fi
+
+codesign_path "${APP_PATH}" runtime
 
 codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
 
