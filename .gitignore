@@ -8,6 +8,7 @@ docs/
 .swiftpm/
 Package.resolved
 PromptPanel/.deps/
+dist/
 
 # Xcode / user state
 DerivedData/
