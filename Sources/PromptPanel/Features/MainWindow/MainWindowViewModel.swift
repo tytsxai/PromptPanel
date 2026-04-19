@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import KeyboardShortcuts
@@ -9,6 +10,28 @@ final class MainWindowViewModel: ObservableObject {
     enum Tab: Hashable {
         case library
         case settings
+    }
+
+    enum EntrySortMode: String, CaseIterable, Identifiable {
+        case uses
+        case recent
+        case alpha
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .uses: return "按使用"
+            case .recent: return "按最近"
+            case .alpha: return "按字母"
+            }
+        }
+    }
+
+    enum SettingsSection: Hashable {
+        case general
+        case backup
+        case about
     }
 
     struct ProjectDraft: Identifiable {
@@ -46,6 +69,7 @@ final class MainWindowViewModel: ObservableObject {
         var type: String
         var isPinned: Bool
         var sortOrder: Int
+        var tagsText: String
 
         init(existingEntry: Entry?, defaultProjectId: String) {
             self.id = existingEntry?.id ?? UUID().uuidString
@@ -56,6 +80,15 @@ final class MainWindowViewModel: ObservableObject {
             self.type = existingEntry?.type ?? Constants.EntryType.prompt.rawValue
             self.isPinned = existingEntry?.isPinned ?? false
             self.sortOrder = existingEntry?.sortOrder ?? 0
+            self.tagsText = (existingEntry?.tags ?? []).joined(separator: ", ")
+        }
+
+        var parsedTags: [String] {
+            Entry.normalizeTags(
+                tagsText
+                    .components(separatedBy: CharacterSet(charactersIn: ",，、 "))
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            )
         }
     }
 
@@ -78,6 +111,10 @@ final class MainWindowViewModel: ObservableObject {
             scheduleEntriesRefresh(delayMs: Constants.mainWindowSearchDebounceMs)
         }
     }
+    @Published var selectedEntryId: String?
+    @Published var entryKindFilter: String?
+    @Published var entryTagFilter: String?
+    @Published var entrySortMode: EntrySortMode = .uses
     @Published var projectDraft: ProjectDraft?
     @Published var entryDraft: EntryDraft?
     @Published var deleteProjectState: ProjectDeletionState?
@@ -86,6 +123,7 @@ final class MainWindowViewModel: ObservableObject {
     @Published var launchAtLoginEnabled: Bool = false
     @Published var bannerMessage: String?
     @Published var isPanelPinned: Bool = false
+    @Published var settingsSection: SettingsSection = .general
 
     private let appState: AppState
     private let projectRepository: ProjectRepository
@@ -98,6 +136,7 @@ final class MainWindowViewModel: ObservableObject {
     private let updaterService: UpdaterService
     private let launchRecoveryReport: LaunchRecoveryReport?
     private let onSetPanelPinned: (Bool) -> Bool
+    private let onCopyEntry: ((Entry) -> Bool)?
     private var cancellables = Set<AnyCancellable>()
     private let entriesLoadQueue = DispatchQueue(label: "PromptPanel.main-window.entries", qos: .userInitiated)
     private var pendingEntriesRefreshWorkItem: DispatchWorkItem?
@@ -114,7 +153,8 @@ final class MainWindowViewModel: ObservableObject {
         storageMaintenanceService: StorageMaintenanceService,
         updaterService: UpdaterService,
         launchRecoveryReport: LaunchRecoveryReport?,
-        onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false }
+        onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false },
+        onCopyEntry: ((Entry) -> Bool)? = nil
     ) {
         self.appState = appState
         self.projectRepository = projectRepository
@@ -127,6 +167,7 @@ final class MainWindowViewModel: ObservableObject {
         self.updaterService = updaterService
         self.launchRecoveryReport = launchRecoveryReport
         self.onSetPanelPinned = onSetPanelPinned
+        self.onCopyEntry = onCopyEntry
 
         observeChanges()
     }
@@ -141,6 +182,130 @@ final class MainWindowViewModel: ObservableObject {
 
     var projectOptions: [Project] {
         projects
+    }
+
+    var selectedEntry: Entry? {
+        guard let selectedEntryId else {
+            return entries.first
+        }
+        return entries.first(where: { $0.id == selectedEntryId }) ?? entries.first
+    }
+
+    var availableEntryKinds: [Constants.EntryType] {
+        var seen = Set<String>()
+        var out: [Constants.EntryType] = []
+        for entry in entries {
+            let type = Constants.EntryType.resolve(entry.type)
+            if seen.insert(type.rawValue).inserted {
+                out.append(type)
+            }
+        }
+        return out
+    }
+
+    /// Most-used tags across the currently loaded entries, capped at `limit`.
+    func topTags(limit: Int = 8) -> [(String, Int)] {
+        var counts: [String: Int] = [:]
+        for entry in entries {
+            for tag in entry.tags {
+                counts[tag, default: 0] += 1
+            }
+        }
+        return counts
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value {
+                    return lhs.value > rhs.value
+                }
+                return lhs.key.localizedCaseInsensitiveCompare(rhs.key) == .orderedAscending
+            }
+            .prefix(limit)
+            .map { ($0.key, $0.value) }
+    }
+
+    var displayedEntries: [Entry] {
+        let filtered: [Entry] = entries.filter { entry in
+            if let kind = entryKindFilter, entry.type != kind {
+                return false
+            }
+            if let tag = entryTagFilter, entry.tags.contains(tag) == false {
+                return false
+            }
+            return true
+        }
+        return filtered.sorted { lhs, rhs in
+            if lhs.isPinned != rhs.isPinned {
+                return lhs.isPinned
+            }
+            switch entrySortMode {
+            case .uses:
+                return lhs.useCount > rhs.useCount
+            case .recent:
+                let l = lhs.lastUsedAt ?? lhs.updatedAt
+                let r = rhs.lastUsedAt ?? rhs.updatedAt
+                return l > r
+            case .alpha:
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        }
+    }
+
+    var projectEntryCount: [String: Int] {
+        Dictionary(grouping: entries, by: { $0.projectId }).mapValues(\.count)
+    }
+
+    func entryCount(forProjectId id: String) -> Int? {
+        projectEntryCount[id]
+    }
+
+    func toggleEntryKindFilter(_ type: Constants.EntryType) {
+        if entryKindFilter == type.rawValue {
+            entryKindFilter = nil
+        } else {
+            entryKindFilter = type.rawValue
+            entryTagFilter = nil
+        }
+    }
+
+    func toggleEntryTagFilter(_ tag: String) {
+        if entryTagFilter == tag {
+            entryTagFilter = nil
+        } else {
+            entryTagFilter = tag
+            entryKindFilter = nil
+        }
+    }
+
+    func clearEntryFilters() {
+        entryKindFilter = nil
+        entryTagFilter = nil
+    }
+
+    func copyEntryContent(_ entry: Entry) {
+        if let onCopyEntry, onCopyEntry(entry) {
+            bannerMessage = "已复制到剪贴板：\(entry.title)"
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if pasteboard.setString(entry.content, forType: .string) {
+            bannerMessage = "已复制到剪贴板：\(entry.title)"
+        } else {
+            bannerMessage = "复制到剪贴板失败，请重试。"
+        }
+    }
+
+    func togglePin(_ entry: Entry) {
+        var updated = entry
+        updated.isPinned.toggle()
+        updated.updatedAt = Date()
+        do {
+            try entryRepository.update(updated)
+            NotificationCenter.default.post(name: .entriesDidChange, object: nil)
+            bannerMessage = updated.isPinned ? "已置顶词条。" : "已取消置顶。"
+        } catch {
+            PPLogger.entry.error("Failed to toggle pin: \(error.localizedDescription)")
+            bannerMessage = "更新置顶失败，请重试。"
+        }
     }
 
     func load() {
@@ -405,6 +570,7 @@ final class MainWindowViewModel: ObservableObject {
         }
 
         do {
+            let parsedTags = draft.parsedTags
             if let existingEntry = draft.existingEntry {
                 let updated = Entry(
                     id: existingEntry.id,
@@ -417,7 +583,8 @@ final class MainWindowViewModel: ObservableObject {
                     useCount: existingEntry.useCount,
                     lastUsedAt: existingEntry.lastUsedAt,
                     createdAt: existingEntry.createdAt,
-                    updatedAt: Date()
+                    updatedAt: Date(),
+                    tags: parsedTags
                 )
                 try entryRepository.update(updated)
                 bannerMessage = "词条已更新。"
@@ -428,7 +595,8 @@ final class MainWindowViewModel: ObservableObject {
                     content: draft.content,
                     type: draft.type,
                     isPinned: draft.isPinned,
-                    sortOrder: draft.sortOrder
+                    sortOrder: draft.sortOrder,
+                    tags: parsedTags
                 )
                 try entryRepository.create(entry)
                 bannerMessage = "词条已创建。"
@@ -586,9 +754,16 @@ final class MainWindowViewModel: ObservableObject {
                     switch result {
                     case .success(let entries):
                         self.entries = entries
+                        if let current = self.selectedEntryId,
+                           entries.contains(where: { $0.id == current }) == false {
+                            self.selectedEntryId = entries.first?.id
+                        } else if self.selectedEntryId == nil {
+                            self.selectedEntryId = entries.first?.id
+                        }
                     case .failure(let error):
                         PPLogger.entry.error("Failed to load entries: \(error.localizedDescription)")
                         self.entries = []
+                        self.selectedEntryId = nil
                         self.bannerMessage = "加载词条失败。"
                     }
                 }

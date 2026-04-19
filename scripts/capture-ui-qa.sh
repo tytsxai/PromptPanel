@@ -94,14 +94,14 @@ DELETE FROM projects WHERE is_default = 0;
 INSERT INTO projects (id, name, is_default, created_at, updated_at) VALUES
   ('proj-promptpanel', 'PromptPanel', 0, datetime('now'), datetime('now')),
   ('proj-fangzhou', '方舟业务', 0, datetime('now'), datetime('now'));
-INSERT INTO entries (id, project_id, title, content, type, is_pinned, sort_order, use_count, last_used_at, created_at, updated_at) VALUES
-  ('entry-pp-1', 'proj-promptpanel', 'Bug 修复回执', '问题现象\n根因\n修复内容\n验证结果\n风险与回滚', 'reply', 1, 90, 12, datetime('now', '-1 hour'), datetime('now', '-2 day'), datetime('now', '-1 hour')),
-  ('entry-pp-2', 'proj-promptpanel', '发布前检查清单', '1. 跑 swift build 和 swift test\n2. 验证权限与自动粘贴链路\n3. 检查数据目录和备份状态', 'note', 0, 70, 6, datetime('now', '-3 hour'), datetime('now', '-2 day'), datetime('now', '-3 hour')),
-  ('entry-pp-3', 'proj-promptpanel', '设计收口提示词', '请基于当前截图判断主链路是否足够紧凑，并给出最值得优先解决的 3 个点。', 'prompt', 0, 50, 4, datetime('now', '-1 day'), datetime('now', '-2 day'), datetime('now', '-1 day')),
-  ('entry-pp-4', 'proj-promptpanel', '交付说明模板', '本次改动已完成实现、构建验证和窗口级验收，未触及数据结构兼容边界。', 'reply', 0, 40, 2, datetime('now', '-2 day'), datetime('now', '-2 day'), datetime('now', '-2 day')),
-  ('entry-g-1', '$default_project_id', '通用：代码审计结论', '请直接列出 P0-P2 级问题、根因、影响面和建议修法。', 'prompt', 1, 80, 18, datetime('now', '-40 minute'), datetime('now', '-4 day'), datetime('now', '-40 minute')),
-  ('entry-g-2', '$default_project_id', '通用：状态同步', '已完成本地验证，下面是当前真实状态与剩余风险。', 'reply', 0, 30, 20, datetime('now', '-5 hour'), datetime('now', '-4 day'), datetime('now', '-5 hour')),
-  ('entry-g-3', '$default_project_id', '通用：日报摘要', '今天完成了主链路优化、异常链路收口和验证脚本补齐。', 'note', 0, 10, 9, datetime('now', '-3 day'), datetime('now', '-5 day'), datetime('now', '-3 day'));
+INSERT INTO entries (id, project_id, title, content, type, is_pinned, sort_order, use_count, last_used_at, created_at, updated_at, tags) VALUES
+  ('entry-pp-1', 'proj-promptpanel', 'Bug 修复回执', '问题现象' || char(10) || '根因' || char(10) || '修复内容' || char(10) || '验证结果' || char(10) || '风险与回滚', 'reply', 1, 90, 12, datetime('now', '-1 hour'), datetime('now', '-2 day'), datetime('now', '-1 hour'), '["回执","工程"]'),
+  ('entry-pp-2', 'proj-promptpanel', '发布前检查清单', '1. 跑 swift build 和 swift test' || char(10) || '2. 验证权限与自动粘贴链路' || char(10) || '3. 检查数据目录和备份状态', 'note', 0, 70, 6, datetime('now', '-3 hour'), datetime('now', '-2 day'), datetime('now', '-3 hour'), '["发布","检查清单"]'),
+  ('entry-pp-3', 'proj-promptpanel', '设计收口提示词', '请基于当前截图判断主链路是否足够紧凑，并给出最值得优先解决的 3 个点。', 'prompt', 0, 50, 4, datetime('now', '-1 day'), datetime('now', '-2 day'), datetime('now', '-1 day'), '["设计","AI"]'),
+  ('entry-pp-4', 'proj-promptpanel', '交付说明模板', '本次改动已完成实现、构建验证和窗口级验收，未触及数据结构兼容边界。', 'reply', 0, 40, 2, datetime('now', '-2 day'), datetime('now', '-2 day'), datetime('now', '-2 day'), '["交付"]'),
+  ('entry-g-1', '$default_project_id', '通用：代码审计结论', '请直接列出 P0-P2 级问题、根因、影响面和建议修法。', 'prompt', 1, 80, 18, datetime('now', '-40 minute'), datetime('now', '-4 day'), datetime('now', '-40 minute'), '["审计","工程"]'),
+  ('entry-g-2', '$default_project_id', '通用：状态同步', '已完成本地验证，下面是当前真实状态与剩余风险。', 'reply', 0, 30, 20, datetime('now', '-5 hour'), datetime('now', '-4 day'), datetime('now', '-5 hour'), '["同步"]'),
+  ('entry-g-3', '$default_project_id', '通用：日报摘要', '今天完成了主链路优化、异常链路收口和验证脚本补齐。', 'note', 0, 10, 9, datetime('now', '-3 day'), datetime('now', '-5 day'), datetime('now', '-3 day'), '["日报"]');
 INSERT INTO app_settings (key, value) VALUES
   ('current_project_id', 'proj-promptpanel')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;

@@ -1,10 +1,40 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 /// Global constants for PromptPanel
 enum Constants {
     private static let appSupportOverrideEnv = "PROMPTPANEL_APP_SUPPORT_DIR"
     private static let logsOverrideEnv = "PROMPTPANEL_LOGS_DIR"
+
+    // MARK: - Visual system (PromptPanel front-end baseline)
+    enum VisualStyle {
+        static let bg = Color(red: 0x0e / 255.0, green: 0x0f / 255.0, blue: 0x11 / 255.0)
+        static let surface = Color(red: 0x17 / 255.0, green: 0x18 / 255.0, blue: 0x1b / 255.0)
+        static let surfaceRaised = Color(red: 0x1e / 255.0, green: 0x1f / 255.0, blue: 0x23 / 255.0)
+        static let surfaceHover = Color(red: 0x24 / 255.0, green: 0x26 / 255.0, blue: 0x2b / 255.0)
+        static let surfaceActive = Color(red: 0x2b / 255.0, green: 0x2e / 255.0, blue: 0x34 / 255.0)
+        static let sidebar = Color(red: 0x14 / 255.0, green: 0x15 / 255.0, blue: 0x18 / 255.0)
+        static let border = Color.white.opacity(0.06)
+        static let borderStrong = Color.white.opacity(0.10)
+        static let divider = Color.white.opacity(0.04)
+
+        static let text = Color(red: 0xe8 / 255.0, green: 0xe9 / 255.0, blue: 0xec / 255.0)
+        static let textSecondary = Color(red: 0x9a / 255.0, green: 0x9e / 255.0, blue: 0xa6 / 255.0)
+        static let textTertiary = Color(red: 0x6b / 255.0, green: 0x6f / 255.0, blue: 0x77 / 255.0)
+        static let textQuaternary = Color(red: 0x4a / 255.0, green: 0x4d / 255.0, blue: 0x54 / 255.0)
+
+        static let accent = Color(red: 0x7c / 255.0, green: 0x8c / 255.0, blue: 0xf8 / 255.0)
+        static let accentDim = Color(red: 0x7c / 255.0, green: 0x8c / 255.0, blue: 0xf8 / 255.0).opacity(0.14)
+        static let accentBorder = Color(red: 0x7c / 255.0, green: 0x8c / 255.0, blue: 0xf8 / 255.0).opacity(0.35)
+
+        static let success = Color(red: 0x5f / 255.0, green: 0xb3 / 255.0, blue: 0x7a / 255.0)
+        static let successDim = Color(red: 0x5f / 255.0, green: 0xb3 / 255.0, blue: 0x7a / 255.0).opacity(0.12)
+        static let warn = Color(red: 0xd4 / 255.0, green: 0xa3 / 255.0, blue: 0x5a / 255.0)
+        static let warnDim = Color(red: 0xd4 / 255.0, green: 0xa3 / 255.0, blue: 0x5a / 255.0).opacity(0.12)
+        static let danger = Color(red: 0xd4 / 255.0, green: 0x70 / 255.0, blue: 0x70 / 255.0)
+        static let dangerDim = Color(red: 0xd4 / 255.0, green: 0x70 / 255.0, blue: 0x70 / 255.0).opacity(0.12)
+    }
 
     // MARK: - Application Identity
 
@@ -70,6 +100,40 @@ enum Constants {
         case code
         case reply
         case note
+
+        var displayName: String {
+            switch self {
+            case .prompt: return "Prompt"
+            case .code: return "代码"
+            case .reply: return "回复"
+            case .note: return "说明"
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .prompt: return "text.bubble.fill"
+            case .code: return "chevron.left.forwardslash.chevron.right"
+            case .reply: return "arrowshape.turn.up.left.fill"
+            case .note: return "note.text"
+            }
+        }
+
+        var accentColor: Color {
+            switch self {
+            case .prompt: return Color(red: 0.36, green: 0.62, blue: 0.95)
+            case .code: return Color(red: 0.36, green: 0.78, blue: 0.56)
+            case .reply: return Color(red: 0.96, green: 0.65, blue: 0.30)
+            case .note: return Color(red: 0.65, green: 0.55, blue: 0.86)
+            }
+        }
+
+        static func resolve(_ rawValue: String?) -> EntryType {
+            guard let rawValue, let parsed = EntryType(rawValue: rawValue) else {
+                return .prompt
+            }
+            return parsed
+        }
     }
 
     // MARK: - Execution Results
@@ -87,34 +151,9 @@ enum Constants {
 
     // MARK: - Panel Performance
 
-    enum Interface {
-        static let outerPadding: CGFloat = 10
-        static let contentPadding: CGFloat = 10
-        static let sectionSpacing: CGFloat = 10
-        static let itemSpacing: CGFloat = 8
-        static let rowSpacing: CGFloat = 4
-        static let cardCornerRadius: CGFloat = 10
-        static let controlCornerRadius: CGFloat = 8
-    }
-
     enum MainWindowLayout {
-        static let defaultContentSize = NSSize(width: 1080, height: 700)
+        static let defaultContentSize = NSSize(width: 1100, height: 740)
         static let minContentSize = NSSize(width: 1020, height: 680)
-        static let sidebarRowHeight: CGFloat = 44
-        static let sidebarListMaxHeight: CGFloat = 288
-    }
-
-    enum PanelLayout {
-        static let outerPadding: CGFloat = 4
-        static let headerSpacing: CGFloat = 4
-        static let controlHeight: CGFloat = 22
-        static let projectControlWidth: CGFloat = 112
-        static let surfaceCornerRadius: CGFloat = 12
-        static let sectionCornerRadius: CGFloat = 10
-        static let rowHeight: CGFloat = 32
-        static let loadingMinHeight: CGFloat = 64
-        static let emptyStateMinHeight: CGFloat = 48
-        static let statusHeight: CGFloat = 24
     }
 
     static let panelContentInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)

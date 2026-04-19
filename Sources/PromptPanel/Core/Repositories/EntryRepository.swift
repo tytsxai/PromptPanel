@@ -71,9 +71,7 @@ final class EntryRepository: @unchecked Sendable {
                     project_priority ASC
                 """
             let rows = try Row.fetchAll(db, sql: sql, arguments: [currentProjectId, currentProjectId, defaultProjectId])
-            return rows.map { row in
-                Entry(row: row)
-            }
+            return try rows.map { try Entry(row: $0) }
         }
     }
 
@@ -125,9 +123,7 @@ final class EntryRepository: @unchecked Sendable {
             let rawArguments: [Any] = [currentProjectId as Any, currentProjectId as Any, escapedQuery as Any] + ids.map { $0 as Any }
             let arguments = StatementArguments(rawArguments)!
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
-            return rows.map { row in
-                Entry(row: row)
-            }
+            return try rows.map { try Entry(row: $0) }
         }
     }
 
@@ -229,24 +225,6 @@ final class EntryRepository: @unchecked Sendable {
             )
         }
         PPLogger.entry.info("Entry \(entryId) moved to project \(projectId)")
-    }
-}
-
-// MARK: - Row-based init for entries (used in raw SQL queries)
-
-extension Entry {
-    init(row: Row) {
-        self.id = row["id"]
-        self.projectId = row["project_id"]
-        self.title = row["title"]
-        self.content = row["content"]
-        self.type = row["type"]
-        self.isPinned = row["is_pinned"]
-        self.sortOrder = row["sort_order"]
-        self.useCount = row["use_count"]
-        self.lastUsedAt = row["last_used_at"]
-        self.createdAt = row["created_at"]
-        self.updatedAt = row["updated_at"]
     }
 }
 

@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 
@@ -236,7 +237,8 @@ final class QuickPanelViewModel: ObservableObject {
 
         let effectiveCurrentProjectId = currentProjectId.isEmpty ? appState.effectiveProjectId : currentProjectId
         let defaultProjectId = appState.defaultProjectId
-        let query = self.query
+        let (cleanedQuery, tagFilter) = Self.extractTagFilter(from: self.query)
+        let query = cleanedQuery
         let searchService = self.searchService
 
         appState.currentProjectId = effectiveCurrentProjectId
@@ -256,13 +258,15 @@ final class QuickPanelViewModel: ObservableObject {
 
                 let result: Result<[Entry], Error>
                 do {
-                    result = .success(
-                        try searchService.search(
-                            query: query,
-                            currentProjectId: effectiveCurrentProjectId,
-                            defaultProjectId: defaultProjectId
-                        )
+                    var entries = try searchService.search(
+                        query: query,
+                        currentProjectId: effectiveCurrentProjectId,
+                        defaultProjectId: defaultProjectId
                     )
+                    if let tagFilter {
+                        entries = entries.filter { $0.tags.contains(tagFilter) }
+                    }
+                    result = .success(entries)
                 } catch {
                     result = .failure(error)
                 }
@@ -326,5 +330,47 @@ final class QuickPanelViewModel: ObservableObject {
     private func setStatus(_ message: String, tone: StatusTone) {
         statusMessage = message
         statusTone = tone
+    }
+
+    /// Extracts the first `#tag` token from the query, returning the remaining
+    /// query text and the extracted tag (without the `#`). Used by the panel to
+    /// mirror the design's `#tag` search syntax.
+    static func extractTagFilter(from query: String) -> (cleanedQuery: String, tag: String?) {
+        var extractedTag: String?
+        var parts: [String] = []
+        for token in query.split(whereSeparator: \.isWhitespace) {
+            if extractedTag == nil, token.hasPrefix("#"), token.count > 1 {
+                extractedTag = String(token.dropFirst())
+                continue
+            }
+            parts.append(String(token))
+        }
+        return (parts.joined(separator: " "), extractedTag)
+    }
+
+    // MARK: - Panel shortcuts
+
+    /// Execute the Nth visible entry (1-indexed). Used by ⌘1-9.
+    func executeEntry(atNumber number: Int, triggerSource: Constants.ExecutionTrigger = .keyboardSubmit) {
+        let index = number - 1
+        guard entries.indices.contains(index) else {
+            return
+        }
+        selectedIndex = index
+        executeSelection(force: true, triggerSource: triggerSource)
+    }
+
+    /// Copy the selected entry to clipboard without attempting paste. Used by ⌘C.
+    func copySelectionOnly() {
+        guard let entry = selectedEntry else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let success = pasteboard.setString(entry.content, forType: .string)
+        if success {
+            setStatus("已复制到剪贴板：\(entry.title)", tone: .info)
+            onClosePanel()
+        } else {
+            setStatus("复制到剪贴板失败，请重试。", tone: .error)
+        }
     }
 }

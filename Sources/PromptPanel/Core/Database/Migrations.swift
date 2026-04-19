@@ -9,6 +9,7 @@ enum Migrations {
         registerV1(migrator: &migrator)
         registerV2ExecutionLogDiagnostics(migrator: &migrator)
         registerV3ExecutionLogInteractionDiagnostics(migrator: &migrator)
+        registerV4EntryTags(migrator: &migrator)
     }
 
     // MARK: - V1: Initial Schema
@@ -132,6 +133,19 @@ enum Migrations {
                 t.add(column: "trigger_source", .text)
                 t.add(column: "target_app_restore_duration_ms", .integer)
             }
+        }
+    }
+
+    private static func registerV4EntryTags(migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("v4_entry_tags") { db in
+            PPLogger.database.info("Running migration: v4_entry_tags")
+
+            try db.alter(table: "entries") { t in
+                // Tags are stored as a JSON array of strings, e.g. ["发布", "检查清单"].
+                // Empty string ("[]") is treated the same as NULL / no tags.
+                t.add(column: "tags", .text).notNull().defaults(to: "[]")
+            }
+            try db.create(indexOn: "entries", columns: ["tags"])
         }
     }
 }

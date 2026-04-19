@@ -10,6 +10,12 @@ struct KeyAwareSearchField: NSViewRepresentable {
     let onSubmit: () -> Void
     let onEscape: () -> Void
     let onFocusResolved: (PanelFocusResult) -> Void
+    /// Optional handler for ⌘+digit (1-9). The `digit` passed is 1-indexed.
+    /// Return `true` to swallow the event.
+    var onCommandDigit: ((Int) -> Bool)? = nil
+    /// Optional handler for ⌘C. Return `true` to swallow the event (suppresses
+    /// the default text copy).
+    var onCommandCopy: (() -> Bool)? = nil
 
     func makeNSView(context: Context) -> PromptSearchField {
         let field = PromptSearchField()
@@ -23,7 +29,25 @@ struct KeyAwareSearchField: NSViewRepresentable {
         field.font = .systemFont(ofSize: 14)
         field.sendsSearchStringImmediately = true
         field.sendsWholeSearchString = false
-        field.keyHandler = { event in
+        field.keyHandler = { [weak field] event in
+            if event.modifierFlags.contains(.command) {
+                // ⌘C — copy the selected entry and close.
+                if let characters = event.charactersIgnoringModifiers?.lowercased(), characters == "c",
+                   field?.stringValue.isEmpty == true || field?.currentEditor()?.selectedRange.length == 0 {
+                    if let onCommandCopy = field?.onCommandCopy, onCommandCopy() {
+                        return true
+                    }
+                }
+                // ⌘1…⌘9 — execute the Nth entry directly.
+                if let characters = event.charactersIgnoringModifiers,
+                   characters.count == 1,
+                   let digit = Int(characters),
+                   (1...9).contains(digit) {
+                    if let onCommandDigit = field?.onCommandDigit, onCommandDigit(digit) {
+                        return true
+                    }
+                }
+            }
             switch Int(event.keyCode) {
             case 126:
                 onMoveSelection(.up)
@@ -41,6 +65,8 @@ struct KeyAwareSearchField: NSViewRepresentable {
                 return false
             }
         }
+        field.onCommandDigit = onCommandDigit
+        field.onCommandCopy = onCommandCopy
         return field
     }
 
@@ -53,6 +79,8 @@ struct KeyAwareSearchField: NSViewRepresentable {
         context.coordinator.onSubmit = onSubmit
         context.coordinator.onEscape = onEscape
         context.coordinator.focusResolveHandler = onFocusResolved
+        nsView.onCommandDigit = onCommandDigit
+        nsView.onCommandCopy = onCommandCopy
 
         if context.coordinator.lastFocusToken != focusToken {
             context.coordinator.lastFocusToken = focusToken
@@ -253,6 +281,8 @@ extension PanelFocusResult {
 
 final class PromptSearchField: NSSearchField {
     var keyHandler: ((NSEvent) -> Bool)?
+    var onCommandDigit: ((Int) -> Bool)?
+    var onCommandCopy: (() -> Bool)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -316,16 +346,10 @@ final class PromptSearchField: NSSearchField {
             return
         }
 
-        let focusedBorderColor = NSColor.controlAccentColor.withAlphaComponent(0.12)
-        let unfocusedBorderColor = NSColor.white.withAlphaComponent(0.06)
-        let backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.036)
-
-        layer.cornerRadius = 16
-        layer.cornerCurve = .continuous
-        layer.borderWidth = 1
-        layer.backgroundColor = backgroundColor.cgColor
-        layer.borderColor = (isFocused ? focusedBorderColor : unfocusedBorderColor).cgColor
-        layer.shadowColor = focusedBorderColor.cgColor
+        layer.cornerRadius = 0
+        layer.borderWidth = 0
+        layer.backgroundColor = NSColor.clear.cgColor
+        layer.borderColor = NSColor.clear.cgColor
         layer.shadowOpacity = 0
         layer.shadowRadius = 0
         layer.shadowOffset = .zero
