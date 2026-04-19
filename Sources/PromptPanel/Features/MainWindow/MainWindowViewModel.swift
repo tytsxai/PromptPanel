@@ -115,6 +115,8 @@ final class MainWindowViewModel: ObservableObject {
     @Published var entryKindFilter: String?
     @Published var entryTagFilter: String?
     @Published var entrySortMode: EntrySortMode = .uses
+    @Published private(set) var projectEntryCounts: [String: Int] = [:]
+    @Published private(set) var totalEntryCount: Int = 0
     @Published var projectDraft: ProjectDraft?
     @Published var entryDraft: EntryDraft?
     @Published var deleteProjectState: ProjectDeletionState?
@@ -123,6 +125,8 @@ final class MainWindowViewModel: ObservableObject {
     @Published var launchAtLoginEnabled: Bool = false
     @Published var bannerMessage: String?
     @Published var isPanelPinned: Bool = false
+    @Published var panelShowFooter: Bool = true
+    @Published var panelCompactRows: Bool = false
     @Published var settingsSection: SettingsSection = .general
 
     private let appState: AppState
@@ -249,12 +253,18 @@ final class MainWindowViewModel: ObservableObject {
         }
     }
 
-    var projectEntryCount: [String: Int] {
-        Dictionary(grouping: entries, by: { $0.projectId }).mapValues(\.count)
+    func entryCount(forProjectId id: String) -> Int {
+        projectEntryCounts[id] ?? 0
     }
 
-    func entryCount(forProjectId id: String) -> Int? {
-        projectEntryCount[id]
+    private func refreshProjectEntryCounts() {
+        do {
+            let counts = try entryRepository.entryCountByProject()
+            projectEntryCounts = counts
+            totalEntryCount = counts.values.reduce(0, +)
+        } catch {
+            PPLogger.entry.error("Failed to load project entry counts: \(error.localizedDescription)")
+        }
     }
 
     func toggleEntryKindFilter(_ type: Constants.EntryType) {
@@ -312,6 +322,7 @@ final class MainWindowViewModel: ObservableObject {
         syncCurrentProjectId()
         refreshPermissionState()
         loadProjects()
+        refreshProjectEntryCounts()
         scheduleEntriesRefresh(delayMs: 0)
         refreshLogs()
         refreshOperationalStatus()
@@ -330,6 +341,32 @@ final class MainWindowViewModel: ObservableObject {
         hasAccessibilityPermission = permissionService.isAccessibilityGranted
         launchAtLoginEnabled = loginItemService.isEnabled
         isPanelPinned = appState.isPanelPinned
+        panelShowFooter = appState.panelShowFooter
+        panelCompactRows = appState.panelCompactRows
+    }
+
+    func setPanelShowFooter(_ isVisible: Bool) {
+        do {
+            try settingsRepository.setPanelFooterVisible(isVisible)
+            appState.panelShowFooter = isVisible
+            panelShowFooter = isVisible
+        } catch {
+            PPLogger.panel.error("Failed to persist panel footer visibility: \(error.localizedDescription)")
+            panelShowFooter = appState.panelShowFooter
+            bannerMessage = "保存面板提示栏开关失败，请重试。"
+        }
+    }
+
+    func setPanelCompactRows(_ isCompact: Bool) {
+        do {
+            try settingsRepository.setPanelCompactRows(isCompact)
+            appState.panelCompactRows = isCompact
+            panelCompactRows = isCompact
+        } catch {
+            PPLogger.panel.error("Failed to persist panel compact rows: \(error.localizedDescription)")
+            panelCompactRows = appState.panelCompactRows
+            bannerMessage = "保存紧凑行高开关失败，请重试。"
+        }
     }
 
     func setPanelPinned(_ isPinned: Bool) {
@@ -640,6 +677,20 @@ final class MainWindowViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        appState.$panelShowFooter
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                self?.panelShowFooter = value
+            }
+            .store(in: &cancellables)
+
+        appState.$panelCompactRows
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                self?.panelCompactRows = value
+            }
+            .store(in: &cancellables)
+
         appState.$currentProjectId
             .combineLatest(appState.$defaultProjectId)
             .receive(on: DispatchQueue.main)
@@ -658,6 +709,7 @@ final class MainWindowViewModel: ObservableObject {
         NotificationCenter.default.publisher(for: .entriesDidChange)
             .sink { [weak self] _ in
                 self?.scheduleEntriesRefresh(delayMs: 0)
+                self?.refreshProjectEntryCounts()
                 self?.refreshLogs()
             }
             .store(in: &cancellables)

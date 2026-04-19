@@ -216,7 +216,7 @@ assert_capture_set() {
     local missing=0
     local name
 
-    for name in panel-default.png panel-min.png library.png settings.png; do
+    for name in panel-default.png panel-min.png library.png settings-general.png settings-backup.png settings-about.png; do
         if ! [[ -s "$OUTPUT_DIR/$name" ]] || ! sips -g pixelWidth -g pixelHeight "$OUTPUT_DIR/$name" >/dev/null 2>&1; then
             echo "Missing or invalid QA screenshot: $OUTPUT_DIR/$name" >&2
             missing=1
@@ -229,7 +229,7 @@ assert_capture_set() {
 }
 
 mkdir -p "$OUTPUT_DIR"
-rm -f "$OUTPUT_DIR"/panel-default.png "$OUTPUT_DIR"/panel-min.png "$OUTPUT_DIR"/library.png "$OUTPUT_DIR"/settings.png
+rm -f "$OUTPUT_DIR"/panel-default.png "$OUTPUT_DIR"/panel-min.png "$OUTPUT_DIR"/library.png "$OUTPUT_DIR"/settings.png "$OUTPUT_DIR"/settings-general.png "$OUTPUT_DIR"/settings-backup.png "$OUTPUT_DIR"/settings-about.png
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
     build_app
@@ -254,10 +254,23 @@ capture_window "$OUTPUT_DIR/library.png" 1000 660 \
     PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
     PROMPTPANEL_QA_MAIN_WINDOW_TAB=library
 
-capture_window "$OUTPUT_DIR/settings.png" 1000 660 \
+capture_window "$OUTPUT_DIR/settings-general.png" 1000 660 \
     PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
     PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
-    PROMPTPANEL_QA_MAIN_WINDOW_TAB=settings
+    PROMPTPANEL_QA_MAIN_WINDOW_TAB=settings \
+    PROMPTPANEL_QA_SETTINGS_SECTION=general
+
+capture_window "$OUTPUT_DIR/settings-backup.png" 1000 660 \
+    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
+    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
+    PROMPTPANEL_QA_MAIN_WINDOW_TAB=settings \
+    PROMPTPANEL_QA_SETTINGS_SECTION=backup
+
+capture_window "$OUTPUT_DIR/settings-about.png" 1000 660 \
+    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
+    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
+    PROMPTPANEL_QA_MAIN_WINDOW_TAB=settings \
+    PROMPTPANEL_QA_SETTINGS_SECTION=about
 
 assert_capture_set
 

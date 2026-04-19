@@ -87,4 +87,33 @@ final class SettingsRepository: @unchecked Sendable {
             height: min(max(size.height, Constants.panelMinContentSize.height), Constants.panelMaxContentSize.height)
         )
     }
+
+    // MARK: - Panel preferences (design baseline)
+
+    func isPanelFooterVisible() throws -> Bool {
+        try getBool(Constants.SettingsKey.panelShowFooter, default: true)
+    }
+
+    func setPanelFooterVisible(_ isVisible: Bool) throws {
+        try setBool(Constants.SettingsKey.panelShowFooter, value: isVisible)
+        PPLogger.panel.info("Panel footer visibility set to: \(isVisible)")
+    }
+
+    func isPanelCompactRows() throws -> Bool {
+        try getBool(Constants.SettingsKey.panelCompactRows, default: false)
+    }
+
+    func setPanelCompactRows(_ isCompact: Bool) throws {
+        try setBool(Constants.SettingsKey.panelCompactRows, value: isCompact)
+        PPLogger.panel.info("Panel compact rows set to: \(isCompact)")
+    }
+
+    func isClosePanelAfterExecute() throws -> Bool {
+        try getBool(Constants.SettingsKey.closePanelAfterExecute, default: true)
+    }
+
+    func setClosePanelAfterExecute(_ value: Bool) throws {
+        try setBool(Constants.SettingsKey.closePanelAfterExecute, value: value)
+        PPLogger.panel.info("Close panel after execute set to: \(value)")
+    }
 }

@@ -56,7 +56,7 @@ struct LibraryView: View {
                     ProjectRow(
                         title: "全部项目",
                         systemImage: "tray.full",
-                        count: viewModel.entries.count,
+                        count: viewModel.totalEntryCount,
                         isActive: viewModel.selectedProjectId == MainWindowViewModel.allProjectsSelection,
                         isCurrent: false
                     ) {
@@ -70,7 +70,7 @@ struct LibraryView: View {
                         ProjectRow(
                             title: project.name,
                             systemImage: nil,
-                            count: nil,
+                            count: viewModel.entryCount(forProjectId: project.id),
                             isActive: viewModel.selectedProjectId == project.id,
                             isCurrent: project.id == viewModel.currentProjectId
                         ) {
@@ -109,8 +109,10 @@ struct LibraryView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "scope")
                             .font(.system(size: 10.5, weight: .medium))
-                        Text("设为当前执行项目")
+                        Text("设为当前项目")
                             .font(.system(size: 11.5, weight: .medium))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Spacer(minLength: 0)
                     }
                     .foregroundStyle(canMarkAsCurrent ? Constants.VisualStyle.textSecondary : Constants.VisualStyle.textQuaternary)

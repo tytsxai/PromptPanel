@@ -4,17 +4,11 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var viewModel: MainWindowViewModel
 
+    private let contentMaxWidth: CGFloat = 720
+
     var body: some View {
         VStack(spacing: 0) {
-            subTabs
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .background(
-                    Rectangle()
-                        .fill(Constants.VisualStyle.divider)
-                        .frame(height: 0.5),
-                    alignment: .bottom
-                )
+            subTabsBar
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -32,10 +26,10 @@ struct SettingsView: View {
                         AboutSettingsSection(viewModel: viewModel)
                     }
                 }
-                .frame(maxWidth: 680, alignment: .leading)
+                .frame(maxWidth: contentMaxWidth, alignment: .leading)
                 .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 40)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             .scrollIndicators(.hidden)
@@ -43,12 +37,21 @@ struct SettingsView: View {
         .background(Constants.VisualStyle.surface)
     }
 
-    private var subTabs: some View {
+    private var subTabsBar: some View {
         HStack(spacing: 0) {
             ForEach(tabs, id: \.section) { tab in
                 subTabButton(title: tab.title, section: tab.section)
             }
             Spacer(minLength: 0)
+        }
+        .frame(maxWidth: contentMaxWidth, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Constants.VisualStyle.divider)
+                .frame(height: 0.5)
         }
     }
 
@@ -65,17 +68,17 @@ struct SettingsView: View {
         return Button {
             viewModel.settingsSection = section
         } label: {
-            VStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(isActive ? Constants.VisualStyle.text : Constants.VisualStyle.textTertiary)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, 8)
-                Rectangle()
-                    .fill(isActive ? Constants.VisualStyle.text : Color.clear)
-                    .frame(height: 2)
-            }
+            Text(title)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(isActive ? Constants.VisualStyle.text : Constants.VisualStyle.textTertiary)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(isActive ? Constants.VisualStyle.text : Color.clear)
+                        .frame(height: 2)
+                }
         }
         .buttonStyle(.plain)
     }
@@ -206,6 +209,8 @@ struct SettingsPillButton: View {
                 }
                 Text(title)
                     .font(.system(size: 11.5, weight: .medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, 10)
@@ -272,6 +277,28 @@ private struct GeneralSettingsSection: View {
                     Toggle("", isOn: Binding(
                         get: { viewModel.isPanelPinned },
                         set: { viewModel.setPanelPinned($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                SettingsRow(
+                    label: "显示键位提示栏",
+                    hint: "面板底部显示 ⏎ / ⌘C / ⌘1-9 等提示。熟练后可关闭。"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { viewModel.panelShowFooter },
+                        set: { viewModel.setPanelShowFooter($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                SettingsRow(
+                    label: "紧凑行高",
+                    hint: "每行更紧凑，一屏可见更多词条。"
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { viewModel.panelCompactRows },
+                        set: { viewModel.setPanelCompactRows($0) }
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)

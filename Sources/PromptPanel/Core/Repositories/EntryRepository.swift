@@ -148,6 +148,23 @@ final class EntryRepository: @unchecked Sendable {
         }
     }
 
+    /// Total entry count per project. Projects with zero entries are included as 0.
+    func entryCountByProject() throws -> [String: Int] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: "SELECT project_id, COUNT(*) AS count FROM entries GROUP BY project_id"
+            )
+            var result: [String: Int] = [:]
+            for row in rows {
+                let projectId: String = row["project_id"]
+                let count: Int = row["count"]
+                result[projectId] = count
+            }
+            return result
+        }
+    }
+
     // MARK: - Write
 
     /// Create a new entry.

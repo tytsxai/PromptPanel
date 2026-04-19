@@ -91,6 +91,9 @@ enum Constants {
         static let panelPinned = "panel_pinned"
         static let panelContentWidth = "panel_content_width"
         static let panelContentHeight = "panel_content_height"
+        static let panelShowFooter = "panel_show_footer"
+        static let panelCompactRows = "panel_compact_rows"
+        static let closePanelAfterExecute = "close_panel_after_execute"
     }
 
     // MARK: - Entry Types

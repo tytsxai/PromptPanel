@@ -180,12 +180,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let defaultProject = try projectRepository.fetchDefault()
         let isPanelPinned = try settingsRepository.isPanelPinned()
         let panelContentSize = try settingsRepository.getPanelContentSize()
+        let panelShowFooter = try settingsRepository.isPanelFooterVisible()
+        let panelCompactRows = try settingsRepository.isPanelCompactRows()
 
         appState.loadPersistedState(
             currentProjectId: currentProjectId,
             defaultProjectId: defaultProject?.id,
             isPanelPinned: isPanelPinned,
-            panelContentSize: panelContentSize
+            panelContentSize: panelContentSize,
+            panelShowFooter: panelShowFooter,
+            panelCompactRows: panelCompactRows
         )
     }
 
@@ -338,9 +342,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let delayMs = Int(environment["PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS"] ?? "") ?? 500
         let targetTab = qaMainWindowTargetTab(from: environment["PROMPTPANEL_QA_MAIN_WINDOW_TAB"])
+        let targetSection = qaSettingsSection(from: environment["PROMPTPANEL_QA_SETTINGS_SECTION"])
         PPLogger.app.info("Scheduling QA auto-open for main window after \(delayMs) ms")
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(max(delayMs, 0))) { [weak self] in
-            self?.openMainWindow(targetTab: targetTab)
+            guard let self else { return }
+            if let targetSection {
+                self.mainWindowViewModel.settingsSection = targetSection
+            }
+            self.openMainWindow(targetTab: targetTab)
+        }
+    }
+
+    private func qaSettingsSection(from rawValue: String?) -> MainWindowViewModel.SettingsSection? {
+        guard let rawValue = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !rawValue.isEmpty else {
+            return nil
+        }
+        switch rawValue {
+        case "general":
+            return .general
+        case "backup":
+            return .backup
+        case "about":
+            return .about
+        default:
+            return nil
         }
     }
 

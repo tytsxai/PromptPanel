@@ -20,6 +20,8 @@ final class AppState: ObservableObject {
     @Published var isPanelVisible: Bool = false
     @Published var isPanelPinned: Bool = false
     @Published var panelContentSize: NSSize = Constants.panelContentSize
+    @Published var panelShowFooter: Bool = true
+    @Published var panelCompactRows: Bool = false
 
     // MARK: - Main Window State
 
@@ -40,14 +42,18 @@ final class AppState: ObservableObject {
         currentProjectId: String?,
         defaultProjectId: String?,
         isPanelPinned: Bool = false,
-        panelContentSize: NSSize = Constants.panelContentSize
+        panelContentSize: NSSize = Constants.panelContentSize,
+        panelShowFooter: Bool = true,
+        panelCompactRows: Bool = false
     ) {
         self.currentProjectId = currentProjectId
         self.defaultProjectId = defaultProjectId
         self.isPanelPinned = isPanelPinned
         self.panelContentSize = panelContentSize
+        self.panelShowFooter = panelShowFooter
+        self.panelCompactRows = panelCompactRows
         PPLogger.app.info(
-            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height))"
+            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height)), showFooter=\(panelShowFooter), compact=\(panelCompactRows)"
         )
     }
 

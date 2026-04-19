@@ -20,8 +20,10 @@ struct QuickPanelView: View {
 
             resultsList
 
-            footerHints
-                .overlay(dividerTop, alignment: .top)
+            if appState.panelShowFooter {
+                footerHints
+                    .overlay(dividerTop, alignment: .top)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(panelSurface)
@@ -186,6 +188,7 @@ struct QuickPanelView: View {
                                 isSelected: index == viewModel.selectedIndex,
                                 showNumber: viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                 showDefaultBadge: shouldShowDefaultBadge(for: entry),
+                                isCompact: appState.panelCompactRows,
                                 onTap: {
                                     viewModel.selectEntry(at: index)
                                 },
@@ -340,6 +343,7 @@ private struct PanelRow: View {
     let isSelected: Bool
     let showNumber: Bool
     let showDefaultBadge: Bool
+    let isCompact: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
 
@@ -404,7 +408,7 @@ private struct PanelRow: View {
             }
             .padding(.leading, 8)
             .padding(.trailing, 12)
-            .frame(height: 34)
+            .frame(height: isCompact ? 28 : 34)
             .background(
                 RoundedRectangle(cornerRadius: Design.rowCornerRadius, style: .continuous)
                     .fill(isSelected ? Constants.VisualStyle.accentDim : Color.clear)
