@@ -37,6 +37,7 @@ final class QuickPanelViewModel: ObservableObject {
     private let permissionService: PermissionService
     private let panelOpenTracker: PanelOpenTracker?
     private let onSetPanelPinned: (Bool) -> Bool
+    private let onOpenSettings: () -> Void
     private let onClosePanel: () -> Void
     private var cancellables = Set<AnyCancellable>()
     private let searchQueue = DispatchQueue(label: "PromptPanel.quick-panel.search", qos: .userInitiated)
@@ -52,6 +53,7 @@ final class QuickPanelViewModel: ObservableObject {
         permissionService: PermissionService,
         panelOpenTracker: PanelOpenTracker? = nil,
         onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false },
+        onOpenSettings: @escaping () -> Void = {},
         onClosePanel: @escaping () -> Void
     ) {
         self.appState = appState
@@ -62,6 +64,7 @@ final class QuickPanelViewModel: ObservableObject {
         self.permissionService = permissionService
         self.panelOpenTracker = panelOpenTracker
         self.onSetPanelPinned = onSetPanelPinned
+        self.onOpenSettings = onOpenSettings
         self.onClosePanel = onClosePanel
         self.currentProjectId = appState.effectiveProjectId
 
@@ -122,6 +125,10 @@ final class QuickPanelViewModel: ObservableObject {
 
     func openAccessibilitySettings() {
         permissionService.openAccessibilitySettings()
+    }
+
+    func openSettings() {
+        onOpenSettings()
     }
 
     func moveSelection(_ direction: SelectionDirection) {

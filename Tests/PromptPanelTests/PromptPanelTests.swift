@@ -37,6 +37,19 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertFalse(try settingsRepository.isPanelPinned())
     }
 
+    func testPanelContentSizeSettingRoundTripsWithNormalization() throws {
+        let databaseManager = try makeDatabaseManager()
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+
+        XCTAssertEqual(try settingsRepository.getPanelContentSize(), Constants.panelContentSize)
+
+        try settingsRepository.setPanelContentSize(NSSize(width: 820, height: 520))
+        XCTAssertEqual(try settingsRepository.getPanelContentSize(), NSSize(width: 820, height: 520))
+
+        try settingsRepository.setPanelContentSize(NSSize(width: 2000, height: 100))
+        XCTAssertEqual(try settingsRepository.getPanelContentSize(), NSSize(width: Constants.panelMaxContentSize.width, height: Constants.panelMinContentSize.height))
+    }
+
     func testMixedEntriesPreferCurrentProjectWhenSortKeysEqual() throws {
         let databaseManager = try makeDatabaseManager()
         let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -491,6 +504,21 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(result, 7)
     }
 
+    func testPanelActivationPolicyPromotesAppWhenAnyWindowIsVisible() {
+        XCTAssertEqual(
+            PanelService.desiredActivationPolicy(isPanelVisible: true, isMainWindowVisible: false),
+            .regular
+        )
+        XCTAssertEqual(
+            PanelService.desiredActivationPolicy(isPanelVisible: false, isMainWindowVisible: true),
+            .regular
+        )
+        XCTAssertEqual(
+            PanelService.desiredActivationPolicy(isPanelVisible: false, isMainWindowVisible: false),
+            .accessory
+        )
+    }
+
     @MainActor
     func testQuickPanelPrepareForPresentationResetsStateAndRequestsFocus() throws {
         let databaseManager = try makeDatabaseManager()
@@ -541,6 +569,51 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(viewModel.focusToken, previousFocusToken + 1)
         XCTAssertFalse(viewModel.isExecutionReady)
         XCTAssertFalse(viewModel.projects.isEmpty)
+    }
+
+    @MainActor
+    func testMainWindowCurrentProjectUpdatesAfterSelectingNewCurrentProject() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let loginItemService = LoginItemService()
+        let updaterService = UpdaterService()
+        let storageMaintenanceService = StorageMaintenanceService(
+            dbQueue: databaseManager.dbQueue,
+            logRepository: logRepository,
+            databaseURL: databaseManager.databaseURL
+        )
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let currentProject = Project(name: "Current")
+        try projectRepository.create(currentProject)
+
+        let viewModel = MainWindowViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            entryRepository: entryRepository,
+            settingsRepository: settingsRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            loginItemService: loginItemService,
+            storageMaintenanceService: storageMaintenanceService,
+            updaterService: updaterService,
+            launchRecoveryReport: nil
+        )
+
+        viewModel.load()
+        viewModel.selectedProjectId = currentProject.id
+        viewModel.setCurrentProjectToSelected()
+
+        XCTAssertEqual(viewModel.currentProjectId, currentProject.id)
+        XCTAssertEqual(appState.currentProjectId, currentProject.id)
+        XCTAssertEqual(try settingsRepository.getCurrentProjectId(), currentProject.id)
+        XCTAssertEqual(viewModel.bannerMessage, "当前项目已切换为 \(currentProject.name)。")
     }
 
     @MainActor
@@ -1080,6 +1153,20 @@ func databaseSeedsDefaultProjectAndCurrentProject() throws {
     let defaultProject = try #require(projectRepository.fetchDefault())
     #expect(defaultProject.name == Constants.defaultProjectName)
     #expect(try settingsRepository.getCurrentProjectId() == defaultProject.id)
+}
+
+@Test
+func panelContentSizeSettingRoundTripsWithNormalization() throws {
+    let databaseManager = try makeDatabaseManager()
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+
+    #expect(try settingsRepository.getPanelContentSize() == Constants.panelContentSize)
+
+    try settingsRepository.setPanelContentSize(NSSize(width: 820, height: 520))
+    #expect(try settingsRepository.getPanelContentSize() == NSSize(width: 820, height: 520))
+
+    try settingsRepository.setPanelContentSize(NSSize(width: 2000, height: 100))
+    #expect(try settingsRepository.getPanelContentSize() == NSSize(width: Constants.panelMaxContentSize.width, height: Constants.panelMinContentSize.height))
 }
 
 @Test
@@ -1742,6 +1829,37 @@ func panelActivationActionRetriesUntilMaxAttempts() {
     #expect(
         PanelService.activationAction(snapshot: stableSnapshot, attempt: 1, maxAttempts: 3)
             == .stable
+    )
+}
+
+@Test
+func panelFocusRequiresActiveKeyWindowBeforeUnlockingExecution() {
+    #expect(
+        PanelFocusResult.interactionReady(
+            appIsActive: true,
+            windowIsVisible: true,
+            windowIsKey: true,
+            firstResponderMatches: true,
+            hasEditor: false
+        )
+    )
+    #expect(
+        !PanelFocusResult.interactionReady(
+            appIsActive: false,
+            windowIsVisible: true,
+            windowIsKey: true,
+            firstResponderMatches: true,
+            hasEditor: true
+        )
+    )
+    #expect(
+        !PanelFocusResult.interactionReady(
+            appIsActive: true,
+            windowIsVisible: true,
+            windowIsKey: false,
+            firstResponderMatches: true,
+            hasEditor: true
+        )
     )
 }
 

@@ -20,7 +20,7 @@ let package = Package(
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
-            path: "PromptPanel",
+            path: "Sources/PromptPanel",
             exclude: [
                 "Resources/Info.plist",
                 "Resources/PromptPanel.entitlements",
@@ -35,7 +35,7 @@ let package = Package(
                 "PromptPanel",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
-            path: "PromptPanelTests"
+            path: "Tests/PromptPanelTests"
         ),
     ]
 )

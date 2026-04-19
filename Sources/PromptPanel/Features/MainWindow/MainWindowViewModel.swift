@@ -6,6 +6,11 @@ import KeyboardShortcuts
 final class MainWindowViewModel: ObservableObject {
     static let allProjectsSelection = "__all_projects__"
 
+    enum Tab: Hashable {
+        case library
+        case settings
+    }
+
     struct ProjectDraft: Identifiable {
         let id: String
         let existingProject: Project?
@@ -61,6 +66,8 @@ final class MainWindowViewModel: ObservableObject {
     @Published private(set) var executionHealthSummary: LogRepository.HealthSummary?
     @Published private(set) var updaterStatusMessage: String = "自动更新未初始化。"
     @Published private(set) var canCheckForUpdates: Bool = false
+    @Published private(set) var currentProjectId: String = ""
+    @Published var selectedTab: Tab = .library
     @Published var selectedProjectId: String = MainWindowViewModel.allProjectsSelection {
         didSet {
             scheduleEntriesRefresh(delayMs: 0)
@@ -128,10 +135,6 @@ final class MainWindowViewModel: ObservableObject {
         pendingEntriesRefreshWorkItem?.cancel()
     }
 
-    var currentProjectId: String {
-        appState.effectiveProjectId
-    }
-
     var selectedProject: Project? {
         projects.first(where: { $0.id == selectedProjectId })
     }
@@ -141,6 +144,7 @@ final class MainWindowViewModel: ObservableObject {
     }
 
     func load() {
+        syncCurrentProjectId()
         refreshPermissionState()
         loadProjects()
         scheduleEntriesRefresh(delayMs: 0)
@@ -150,6 +154,10 @@ final class MainWindowViewModel: ObservableObject {
         if let launchRecoveryReport {
             bannerMessage = launchRecoveryReport.userFacingMessage
         }
+    }
+
+    func openSettingsTab() {
+        selectedTab = .settings
     }
 
     func refreshPermissionState() {
@@ -464,6 +472,14 @@ final class MainWindowViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        appState.$currentProjectId
+            .combineLatest(appState.$defaultProjectId)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _ in
+                self?.syncCurrentProjectId()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .projectsDidChange)
             .sink { [weak self] _ in
                 self?.loadProjects()
@@ -480,9 +496,14 @@ final class MainWindowViewModel: ObservableObject {
 
         NotificationCenter.default.publisher(for: .currentProjectDidChange)
             .sink { [weak self] _ in
-                self?.objectWillChange.send()
+                self?.syncCurrentProjectId()
+                self?.scheduleEntriesRefresh(delayMs: 0)
             }
             .store(in: &cancellables)
+    }
+
+    private func syncCurrentProjectId() {
+        currentProjectId = appState.effectiveProjectId
     }
 
     private func notifyProjectsChanged() {

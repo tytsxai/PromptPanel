@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR=${0:A:h}
 REPO_ROOT=${SCRIPT_DIR:h}
-PACKAGE_ROOT="${REPO_ROOT}/PromptPanel"
+PACKAGE_ROOT="$REPO_ROOT"
 APP_NAME="PromptPanel"
 CONFIGURATION="release"
 OUTPUT_ROOT="${REPO_ROOT}/dist"
@@ -143,7 +143,7 @@ RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 rm -rf "$APP_PATH"
 mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
 
-cp "${PACKAGE_ROOT}/PromptPanel/Resources/Info.plist" "${CONTENTS_DIR}/Info.plist"
+cp "${PACKAGE_ROOT}/Sources/PromptPanel/Resources/Info.plist" "${CONTENTS_DIR}/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${APP_NAME}" "${CONTENTS_DIR}/Info.plist"
 if [[ -n "$SHORT_VERSION_OVERRIDE" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${SHORT_VERSION_OVERRIDE}" "${CONTENTS_DIR}/Info.plist"

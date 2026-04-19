@@ -100,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             updaterService.start()
             refreshPermissionState()
             schedulePanelAutoOpenForQAIfNeeded()
+            scheduleMainWindowAutoOpenForQAIfNeeded()
             presentLaunchRecoveryAlertIfNeeded()
         } catch {
             PPLogger.app.error("Failed to initialize: \(error.localizedDescription)")
@@ -178,11 +179,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let currentProjectId = try settingsRepository.getCurrentProjectId()
         let defaultProject = try projectRepository.fetchDefault()
         let isPanelPinned = try settingsRepository.isPanelPinned()
+        let panelContentSize = try settingsRepository.getPanelContentSize()
 
         appState.loadPersistedState(
             currentProjectId: currentProjectId,
             defaultProjectId: defaultProject?.id,
-            isPanelPinned: isPanelPinned
+            isPanelPinned: isPanelPinned,
+            panelContentSize: panelContentSize
         )
     }
 
@@ -221,6 +224,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             onSetPanelPinned: { [weak self] isPinned in
                 self?.updatePanelPinnedState(isPinned) ?? false
             },
+            onOpenSettings: { [weak self] in
+                self?.panelService.hide()
+                self?.openMainWindow(targetTab: .settings)
+            },
             onClosePanel: { [weak self] in
                 self?.panelService.hide()
             }
@@ -253,6 +260,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         panelService.onDidStabilizeActivation = { [weak self] in
             self?.quickPanelViewModel.retryFocusAfterActivationStabilized()
+        }
+        panelService.onPanelContentSizeChanged = { [weak self] size in
+            do {
+                try self?.settingsRepository.setPanelContentSize(size)
+            } catch {
+                PPLogger.panel.error("Failed to persist panel content size: \(error.localizedDescription)")
+            }
         }
 
         trayManager = TrayManager(
@@ -315,11 +329,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func openMainWindow() {
+    private func scheduleMainWindowAutoOpenForQAIfNeeded() {
+        let environment = ProcessInfo.processInfo.environment
+        guard let rawValue = environment["PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH"]?.lowercased(),
+              ["1", "true", "yes"].contains(rawValue) else {
+            return
+        }
+
+        let delayMs = Int(environment["PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS"] ?? "") ?? 500
+        let targetTab = qaMainWindowTargetTab(from: environment["PROMPTPANEL_QA_MAIN_WINDOW_TAB"])
+        PPLogger.app.info("Scheduling QA auto-open for main window after \(delayMs) ms")
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(max(delayMs, 0))) { [weak self] in
+            self?.openMainWindow(targetTab: targetTab)
+        }
+    }
+
+    private func qaMainWindowTargetTab(from rawValue: String?) -> MainWindowViewModel.Tab? {
+        guard let rawValue = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !rawValue.isEmpty else {
+            return nil
+        }
+
+        switch rawValue {
+        case "library", "content", "contents":
+            return .library
+        case "settings", "setting":
+            return .settings
+        default:
+            return nil
+        }
+    }
+
+    private func openMainWindow(targetTab: MainWindowViewModel.Tab? = nil) {
+        if let targetTab {
+            mainWindowViewModel.selectedTab = targetTab
+        }
         if mainWindow == nil {
             let contentView = MainWindowView(viewModel: mainWindowViewModel)
+            let defaultSize = Constants.MainWindowLayout.defaultContentSize
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1180, height: 780),
+                contentRect: NSRect(x: 0, y: 0, width: defaultSize.width, height: defaultSize.height),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
                 backing: .buffered,
                 defer: false

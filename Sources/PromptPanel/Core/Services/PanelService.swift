@@ -13,6 +13,7 @@ final class PanelService {
     private var panel: NSPanel?
     private var panelDelegate: PanelDelegate?
     private var targetApplication: NSRunningApplication?
+    private var deactivateCloseGraceDeadline: Date?
     private let appState: AppState
     private let panelVisibilityCoordinator = PanelVisibilityCoordinator()
     private let panelOpenTracker: PanelOpenTracker?
@@ -21,6 +22,7 @@ final class PanelService {
     var contentViewProvider: (() -> NSView)?
     var onWillShow: (() -> Void)?
     var onDidStabilizeActivation: (() -> Void)?
+    var onPanelContentSizeChanged: ((NSSize) -> Void)?
 
     init(appState: AppState, panelOpenTracker: PanelOpenTracker? = nil) {
         self.appState = appState
@@ -59,6 +61,9 @@ final class PanelService {
         }
 
         onWillShow?()
+        deactivateCloseGraceDeadline = Date().addingTimeInterval(
+            TimeInterval(Constants.panelDeactivateCloseGraceMs) / 1000
+        )
 
         // Position panel in center of the active screen
         if let screen = NSScreen.main {
@@ -87,6 +92,7 @@ final class PanelService {
 
         panel?.orderOut(nil)
         appState.isPanelVisible = false
+        deactivateCloseGraceDeadline = nil
         panelVisibilityCoordinator.finishHide()
         if panelOpenTracker?.currentTrace?.searchFieldFocusedAt == nil {
             panelOpenTracker?.cancelCurrentTrace(reason: "panel_hidden_before_focus")
@@ -115,10 +121,10 @@ final class PanelService {
 
     /// Create the NSPanel with proper configuration.
     private func createPanel() {
-        let windowSize = Constants.panelWindowSize
+        let windowSize = Constants.panelWindowContentSize(for: appState.panelContentSize)
         let panel = QuickPanelWindow(
             contentRect: NSRect(origin: .zero, size: windowSize),
-            styleMask: [.titled, .closable, .fullSizeContentView],
+            styleMask: [.resizable],
             backing: .buffered,
             defer: false
         )
@@ -132,6 +138,8 @@ final class PanelService {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        panel.contentMinSize = Constants.panelWindowContentSize(for: Constants.panelMinContentSize)
+        panel.contentMaxSize = Constants.panelWindowContentSize(for: Constants.panelMaxContentSize)
         applyPinnedWindowBehavior(to: panel)
 
         configureWindowButtons(for: panel)
@@ -145,6 +153,12 @@ final class PanelService {
         let delegate = PanelDelegate(
             onClose: { [weak self] in
                 self?.hide()
+            },
+            onResize: { [weak self] contentSize in
+                self?.handlePanelResize(contentSize: contentSize)
+            },
+            shouldDeferCloseOnDeactivate: { [weak self] in
+                self?.shouldDeferCloseOnDeactivate() ?? false
             },
             shouldCloseOnDeactivate: { [weak self] in
                 self?.appState.isPanelPinned == false
@@ -160,16 +174,16 @@ final class PanelService {
     private func configureWindowButtons(for panel: NSPanel) {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
-        panel.standardWindowButton(.closeButton)?.isEnabled = true
+        panel.standardWindowButton(.closeButton)?.isHidden = true
     }
 
     private func makePanelBackgroundView(contentView: NSView) -> NSVisualEffectView {
         let backgroundView = NSVisualEffectView()
-        backgroundView.material = .hudWindow
+        backgroundView.material = .underWindowBackground
         backgroundView.blendingMode = .behindWindow
         backgroundView.state = .followsWindowActiveState
         backgroundView.wantsLayer = true
-        backgroundView.layer?.cornerRadius = 20
+        backgroundView.layer?.cornerRadius = 14
         backgroundView.layer?.masksToBounds = true
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -185,6 +199,22 @@ final class PanelService {
         ])
 
         return backgroundView
+    }
+
+    private func handlePanelResize(contentSize: NSSize) {
+        let panelContentSize = NSSize(
+            width: max(Constants.panelMinContentSize.width, contentSize.width - Constants.panelContentInsets.left - Constants.panelContentInsets.right),
+            height: max(Constants.panelMinContentSize.height, contentSize.height - Constants.panelContentInsets.top - Constants.panelContentInsets.bottom)
+        )
+        let normalizedSize = NSSize(
+            width: min(panelContentSize.width, Constants.panelMaxContentSize.width),
+            height: min(panelContentSize.height, Constants.panelMaxContentSize.height)
+        )
+        guard appState.panelContentSize != normalizedSize else {
+            return
+        }
+        appState.panelContentSize = normalizedSize
+        onPanelContentSizeChanged?(normalizedSize)
     }
 
     private func applyPinnedWindowBehavior(to panel: NSPanel) {
@@ -238,6 +268,7 @@ final class PanelService {
 
             switch action {
             case .stable:
+                self.deactivateCloseGraceDeadline = nil
                 self.panelOpenTracker?.recordPanelActivationCheck(attempt: attempt, snapshot: snapshot, final: true)
                 self.onDidStabilizeActivation?()
             case .retry(let nextAttempt):
@@ -246,6 +277,7 @@ final class PanelService {
                 self.bringPanelToFront(panel)
                 self.stabilizePanelActivation(panel, attempt: nextAttempt)
             case .failed:
+                self.deactivateCloseGraceDeadline = nil
                 self.panelOpenTracker?.recordPanelActivationCheck(attempt: attempt, snapshot: snapshot, final: true)
                 PPLogger.panel.error(
                     "panel_activation_failed attempt=\(attempt) app_active=\(snapshot.appIsActive) panel_visible=\(snapshot.panelIsVisible) panel_key=\(snapshot.panelIsKey)"
@@ -307,6 +339,13 @@ final class PanelService {
 
         PPLogger.app.info("Switched activation policy to \(String(describing: policy))")
     }
+
+    private func shouldDeferCloseOnDeactivate(now: Date = Date()) -> Bool {
+        guard let deactivateCloseGraceDeadline else {
+            return false
+        }
+        return now < deactivateCloseGraceDeadline
+    }
 }
 
 // MARK: - Panel Delegate
@@ -314,19 +353,39 @@ final class PanelService {
 private class PanelDelegate: NSObject, NSWindowDelegate {
 
     let onClose: () -> Void
+    let onResize: (NSSize) -> Void
+    let shouldDeferCloseOnDeactivate: () -> Bool
     let shouldCloseOnDeactivate: () -> Bool
     private let resignCloseDelayMs = 80
 
-    init(onClose: @escaping () -> Void, shouldCloseOnDeactivate: @escaping () -> Bool) {
+    init(
+        onClose: @escaping () -> Void,
+        onResize: @escaping (NSSize) -> Void,
+        shouldDeferCloseOnDeactivate: @escaping () -> Bool,
+        shouldCloseOnDeactivate: @escaping () -> Bool
+    ) {
         self.onClose = onClose
+        self.onResize = onResize
+        self.shouldDeferCloseOnDeactivate = shouldDeferCloseOnDeactivate
         self.shouldCloseOnDeactivate = shouldCloseOnDeactivate
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else {
+            return
+        }
+        let contentRect = window.contentRect(forFrameRect: window.frame)
+        onResize(contentRect.size)
     }
 
     func windowDidResignKey(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else {
             return
         }
+        scheduleDeactivateCloseCheck(for: window)
+    }
 
+    private func scheduleDeactivateCloseCheck(for window: NSWindow) {
         // Delay the close check so transient focus churn during presentation does not
         // immediately dismiss the panel, while real click-outside transitions still do.
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(resignCloseDelayMs)) { [weak self, weak window] in
@@ -343,6 +402,10 @@ private class PanelDelegate: NSObject, NSWindowDelegate {
                 return
             }
             guard self.shouldCloseOnDeactivate() else {
+                return
+            }
+            if self.shouldDeferCloseOnDeactivate() {
+                self.scheduleDeactivateCloseCheck(for: window)
                 return
             }
             self.onClose()

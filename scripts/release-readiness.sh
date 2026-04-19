@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR=${0:A:h}
 REPO_ROOT=${SCRIPT_DIR:h}
-PACKAGE_ROOT="${REPO_ROOT}/PromptPanel"
+PACKAGE_ROOT="$REPO_ROOT"
 OUTPUT_ROOT="${REPO_ROOT}/dist/release-readiness"
 SIGN_IDENTITY="none"
 PUBLIC_DISTRIBUTION=0

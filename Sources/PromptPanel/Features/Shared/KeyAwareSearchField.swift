@@ -17,10 +17,10 @@ struct KeyAwareSearchField: NSViewRepresentable {
         field.placeholderAttributedString = NSAttributedString(
             string: placeholder,
             attributes: [
-                .foregroundColor: NSColor.secondaryLabelColor
+                .foregroundColor: NSColor.labelColor.withAlphaComponent(0.46)
             ]
         )
-        field.font = .systemFont(ofSize: 15)
+        field.font = .systemFont(ofSize: 14)
         field.sendsSearchStringImmediately = true
         field.sendsWholeSearchString = false
         field.keyHandler = { event in
@@ -175,24 +175,44 @@ struct KeyAwareSearchField: NSViewRepresentable {
             let window = field.window
             let hasEditor = field.currentEditor() != nil
             let firstResponderMatches = window?.firstResponder === field
+            let appIsActive = NSApp.isActive
+            let windowIsVisible = window?.isVisible ?? false
+            let windowIsKey = window?.isKeyWindow ?? false
+            let windowIsMain = window?.isMainWindow ?? false
             return PanelFocusResult(
                 token: token,
-                succeeded: hasEditor || firstResponderMatches,
+                succeeded: PanelFocusResult.interactionReady(
+                    appIsActive: appIsActive,
+                    windowIsVisible: windowIsVisible,
+                    windowIsKey: windowIsKey,
+                    firstResponderMatches: firstResponderMatches,
+                    hasEditor: hasEditor
+                ),
                 attempt: attempt,
-                appIsActive: NSApp.isActive,
-                windowIsVisible: window?.isVisible ?? false,
-                windowIsKey: window?.isKeyWindow ?? false,
-                windowIsMain: window?.isMainWindow ?? false,
+                appIsActive: appIsActive,
+                windowIsVisible: windowIsVisible,
+                windowIsKey: windowIsKey,
+                windowIsMain: windowIsMain,
                 firstResponderMatches: firstResponderMatches,
                 hasEditor: hasEditor
             )
         }
 
         private func activateWindowIfNeeded(for field: PromptSearchField) {
-            _ = NSRunningApplication.current.activate(options: [])
-            NSApp.activate(ignoringOtherApps: true)
-            field.window?.makeKeyAndOrderFront(nil)
-            field.window?.makeMain()
+            guard let window = field.window else {
+                return
+            }
+
+            if NSApp.isActive == false {
+                _ = NSRunningApplication.current.activate(options: [])
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            if window.isKeyWindow == false {
+                window.makeKeyAndOrderFront(nil)
+            }
+            if window.isMainWindow == false {
+                window.makeMain()
+            }
         }
 
         private func reportSuccessfulFocusIfNeeded(field: PromptSearchField, attempt: Int) {
@@ -216,6 +236,18 @@ struct KeyAwareSearchField: NSViewRepresentable {
             reportedSuccessfulFocusToken = result.token
             focusResolveHandler(result)
         }
+    }
+}
+
+extension PanelFocusResult {
+    static func interactionReady(
+        appIsActive: Bool,
+        windowIsVisible: Bool,
+        windowIsKey: Bool,
+        firstResponderMatches: Bool,
+        hasEditor: Bool
+    ) -> Bool {
+        appIsActive && windowIsVisible && windowIsKey && (firstResponderMatches || hasEditor)
     }
 }
 
@@ -275,6 +307,7 @@ final class PromptSearchField: NSSearchField {
         translatesAutoresizingMaskIntoConstraints = false
         lineBreakMode = .byTruncatingTail
         cell?.usesSingleLineMode = true
+        (cell as? NSSearchFieldCell)?.searchButtonCell = nil
         applyAppearance(isFocused: false)
     }
 
@@ -283,23 +316,18 @@ final class PromptSearchField: NSSearchField {
             return
         }
 
-        let focusedBorderColor = NSColor(
-            calibratedRed: 0.98,
-            green: 0.63,
-            blue: 0.38,
-            alpha: isFocused ? 0.72 : 0.0
-        )
-        let unfocusedBorderColor = NSColor.white.withAlphaComponent(0.10)
-        let backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.08)
+        let focusedBorderColor = NSColor.controlAccentColor.withAlphaComponent(0.12)
+        let unfocusedBorderColor = NSColor.white.withAlphaComponent(0.06)
+        let backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.036)
 
         layer.cornerRadius = 16
         layer.cornerCurve = .continuous
-        layer.borderWidth = isFocused ? 1.5 : 1
+        layer.borderWidth = 1
         layer.backgroundColor = backgroundColor.cgColor
         layer.borderColor = (isFocused ? focusedBorderColor : unfocusedBorderColor).cgColor
         layer.shadowColor = focusedBorderColor.cgColor
-        layer.shadowOpacity = isFocused ? 0.22 : 0
-        layer.shadowRadius = isFocused ? 14 : 0
+        layer.shadowOpacity = 0
+        layer.shadowRadius = 0
         layer.shadowOffset = .zero
     }
 }

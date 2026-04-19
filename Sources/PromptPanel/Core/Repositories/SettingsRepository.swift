@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import GRDB
 
@@ -65,5 +66,25 @@ final class SettingsRepository: @unchecked Sendable {
     func setPanelPinned(_ isPinned: Bool) throws {
         try setBool(Constants.SettingsKey.panelPinned, value: isPinned)
         PPLogger.panel.info("Panel pinned set to: \(isPinned)")
+    }
+
+    func getPanelContentSize() throws -> NSSize {
+        let width = Double(try get(Constants.SettingsKey.panelContentWidth) ?? "") ?? Constants.panelContentSize.width
+        let height = Double(try get(Constants.SettingsKey.panelContentHeight) ?? "") ?? Constants.panelContentSize.height
+        return normalizedPanelContentSize(NSSize(width: width, height: height))
+    }
+
+    func setPanelContentSize(_ size: NSSize) throws {
+        let normalizedSize = normalizedPanelContentSize(size)
+        try set(Constants.SettingsKey.panelContentWidth, value: String(Int(normalizedSize.width.rounded())))
+        try set(Constants.SettingsKey.panelContentHeight, value: String(Int(normalizedSize.height.rounded())))
+        PPLogger.panel.info("Panel content size set to: \(Int(normalizedSize.width))x\(Int(normalizedSize.height))")
+    }
+
+    private func normalizedPanelContentSize(_ size: NSSize) -> NSSize {
+        NSSize(
+            width: min(max(size.width, Constants.panelMinContentSize.width), Constants.panelMaxContentSize.width),
+            height: min(max(size.height, Constants.panelMinContentSize.height), Constants.panelMaxContentSize.height)
+        )
     }
 }

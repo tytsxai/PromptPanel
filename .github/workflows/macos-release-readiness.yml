@@ -48,11 +48,9 @@ jobs:
           fi
 
       - name: Build package
-        working-directory: PromptPanel
         run: swift build
 
       - name: Run tests
-        working-directory: PromptPanel
         run: swift test
 
       - name: Build release app

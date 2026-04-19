@@ -7,7 +7,7 @@ docs/
 .build/
 .swiftpm/
 Package.resolved
-PromptPanel/.deps/
+.deps/
 dist/
 
 # Xcode / user state
@@ -18,7 +18,5 @@ DerivedData/
 *.xcuserstate
 
 # Local app data / logs
-PromptPanel/.swiftpm/
-PromptPanel/.build/
-PromptPanel/*.db
-PromptPanel/*.sqlite*
+*.db
+*.sqlite*

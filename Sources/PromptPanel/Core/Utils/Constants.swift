@@ -59,6 +59,8 @@ enum Constants {
     enum SettingsKey {
         static let currentProjectId = "current_project_id"
         static let panelPinned = "panel_pinned"
+        static let panelContentWidth = "panel_content_width"
+        static let panelContentHeight = "panel_content_height"
     }
 
     // MARK: - Entry Types
@@ -85,20 +87,56 @@ enum Constants {
 
     // MARK: - Panel Performance
 
-    static let panelContentInsets = NSEdgeInsets(top: 24, left: 16, bottom: 16, right: 16)
-    static let panelContentSize = NSSize(width: 700, height: 468)
-    static var panelWindowSize: NSSize {
+    enum Interface {
+        static let outerPadding: CGFloat = 10
+        static let contentPadding: CGFloat = 10
+        static let sectionSpacing: CGFloat = 10
+        static let itemSpacing: CGFloat = 8
+        static let rowSpacing: CGFloat = 4
+        static let cardCornerRadius: CGFloat = 10
+        static let controlCornerRadius: CGFloat = 8
+    }
+
+    enum MainWindowLayout {
+        static let defaultContentSize = NSSize(width: 1080, height: 700)
+        static let minContentSize = NSSize(width: 1020, height: 680)
+        static let sidebarRowHeight: CGFloat = 44
+        static let sidebarListMaxHeight: CGFloat = 288
+    }
+
+    enum PanelLayout {
+        static let outerPadding: CGFloat = 4
+        static let headerSpacing: CGFloat = 4
+        static let controlHeight: CGFloat = 22
+        static let projectControlWidth: CGFloat = 112
+        static let surfaceCornerRadius: CGFloat = 12
+        static let sectionCornerRadius: CGFloat = 10
+        static let rowHeight: CGFloat = 32
+        static let loadingMinHeight: CGFloat = 64
+        static let emptyStateMinHeight: CGFloat = 48
+        static let statusHeight: CGFloat = 24
+    }
+
+    static let panelContentInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+    static let panelContentSize = NSSize(width: 680, height: 384)
+    static let panelMinContentSize = NSSize(width: 560, height: 300)
+    static let panelMaxContentSize = NSSize(width: 1120, height: 760)
+    static func panelWindowContentSize(for panelContentSize: NSSize) -> NSSize {
         NSSize(
             width: panelContentSize.width + panelContentInsets.left + panelContentInsets.right,
             height: panelContentSize.height + panelContentInsets.top + panelContentInsets.bottom
         )
     }
+    static var panelWindowSize: NSSize {
+        panelWindowContentSize(for: panelContentSize)
+    }
     static let panelOpenLatencyTargetMs = 300
     static let panelExecutionUnlockDelayMs = 50
     static let panelActivationRetryDelayMs = 60
-    static let panelActivationMaxAttempts = 3
+    static let panelActivationMaxAttempts = 8
     static let panelFocusRetryDelayMs = 60
     static let panelFocusMaxAttempts = 10
+    static let panelDeactivateCloseGraceMs = 900
     static let panelSearchDebounceMs = 80
     static let mainWindowSearchDebounceMs = 120
     static let searchLatencyTargetMs = 80

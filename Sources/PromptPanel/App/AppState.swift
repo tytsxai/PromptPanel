@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
 
     @Published var isPanelVisible: Bool = false
     @Published var isPanelPinned: Bool = false
+    @Published var panelContentSize: NSSize = Constants.panelContentSize
 
     // MARK: - Main Window State
 
@@ -35,12 +36,18 @@ final class AppState: ObservableObject {
     }
 
     /// Called once after database is ready to load persisted state.
-    func loadPersistedState(currentProjectId: String?, defaultProjectId: String?, isPanelPinned: Bool = false) {
+    func loadPersistedState(
+        currentProjectId: String?,
+        defaultProjectId: String?,
+        isPanelPinned: Bool = false,
+        panelContentSize: NSSize = Constants.panelContentSize
+    ) {
         self.currentProjectId = currentProjectId
         self.defaultProjectId = defaultProjectId
         self.isPanelPinned = isPanelPinned
+        self.panelContentSize = panelContentSize
         PPLogger.app.info(
-            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned)"
+            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height))"
         )
     }
 
