@@ -4,7 +4,6 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var viewModel: MainWindowViewModel
 
-    private let contentMaxWidth: CGFloat = 980
     private let columnSpacing: CGFloat = 12
 
     var body: some View {
@@ -31,11 +30,10 @@ struct SettingsView: View {
 
                 RecentExecutionsSection(viewModel: viewModel)
             }
-            .frame(maxWidth: contentMaxWidth, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 24)
-            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.hidden)
         .background(Constants.VisualStyle.surface)

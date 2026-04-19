@@ -16,11 +16,10 @@ usage() {
     cat <<'EOF'
 Usage: scripts/capture-ui-qa.sh [--skip-build] [--output-dir <path>]
 
-Captures four window-cropped QA screenshots:
-  - panel-default.png
-  - panel-min.png
-  - library.png
-  - settings.png
+Captures three window-cropped QA screenshots at the unified default sizes:
+  - panel.png       (快捷面板 780x440)
+  - library.png     (主窗口 · 内容库 1100x740)
+  - settings.png    (主窗口 · 设置 1100x740)
 EOF
 }
 
@@ -216,7 +215,7 @@ assert_capture_set() {
     local missing=0
     local name
 
-    for name in panel-default.png panel-min.png library.png settings.png; do
+    for name in panel.png library.png settings.png; do
         if ! [[ -s "$OUTPUT_DIR/$name" ]] || ! sips -g pixelWidth -g pixelHeight "$OUTPUT_DIR/$name" >/dev/null 2>&1; then
             echo "Missing or invalid QA screenshot: $OUTPUT_DIR/$name" >&2
             missing=1
@@ -229,8 +228,11 @@ assert_capture_set() {
 }
 
 mkdir -p "$OUTPUT_DIR"
-rm -f "$OUTPUT_DIR"/panel-default.png "$OUTPUT_DIR"/panel-min.png "$OUTPUT_DIR"/library.png "$OUTPUT_DIR"/settings.png "$OUTPUT_DIR"/settings-general.png "$OUTPUT_DIR"/settings-backup.png "$OUTPUT_DIR"/settings-about.png
-# Clean any legacy multi-tab settings screenshots that are no longer produced.
+rm -f \
+    "$OUTPUT_DIR"/panel.png "$OUTPUT_DIR"/library.png "$OUTPUT_DIR"/settings.png \
+    "$OUTPUT_DIR"/panel-default.png "$OUTPUT_DIR"/panel-min.png \
+    "$OUTPUT_DIR"/settings-general.png "$OUTPUT_DIR"/settings-backup.png "$OUTPUT_DIR"/settings-about.png
+# Legacy per-mode files above are cleaned so stale artifacts don't linger.
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
     build_app
@@ -239,17 +241,12 @@ fi
 bootstrap_database
 seed_sample_data
 
-set_panel_size 680 384
-capture_window "$OUTPUT_DIR/panel-default.png" 640 320 \
+# Unified default panel size (matches Constants.panelContentSize = 780x440).
+set_panel_size 780 440
+capture_window "$OUTPUT_DIR/panel.png" 740 400 \
     PROMPTPANEL_QA_OPEN_PANEL_ON_LAUNCH=1 \
     PROMPTPANEL_QA_OPEN_PANEL_DELAY_MS=700
 
-set_panel_size 560 300
-capture_window "$OUTPUT_DIR/panel-min.png" 540 280 \
-    PROMPTPANEL_QA_OPEN_PANEL_ON_LAUNCH=1 \
-    PROMPTPANEL_QA_OPEN_PANEL_DELAY_MS=700
-
-set_panel_size 680 384
 capture_window "$OUTPUT_DIR/library.png" 1000 660 \
     PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
     PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \

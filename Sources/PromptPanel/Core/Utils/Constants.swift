@@ -160,7 +160,8 @@ enum Constants {
     }
 
     static let panelContentInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
-    static let panelContentSize = NSSize(width: 680, height: 384)
+    /// Unified default panel size (matches `frontend-draft/index.html` width=780).
+    static let panelContentSize = NSSize(width: 780, height: 440)
     static let panelMinContentSize = NSSize(width: 560, height: 300)
     static let panelMaxContentSize = NSSize(width: 1120, height: 760)
     static func panelWindowContentSize(for panelContentSize: NSSize) -> NSSize {
