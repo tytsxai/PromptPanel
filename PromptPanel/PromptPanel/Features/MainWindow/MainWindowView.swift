@@ -5,16 +5,30 @@ struct MainWindowView: View {
     @ObservedObject var viewModel: MainWindowViewModel
 
     var body: some View {
-        TabView {
-            libraryTab
-                .tabItem {
-                    Label("内容库", systemImage: "books.vertical")
-                }
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.94, green: 0.97, blue: 1.00),
+                    Color(red: 0.89, green: 0.95, blue: 0.98),
+                    Color(red: 0.95, green: 0.93, blue: 0.98)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-            settingsTab
-                .tabItem {
-                    Label("设置", systemImage: "gearshape")
-                }
+            TabView {
+                libraryTab
+                    .tabItem {
+                        Label("内容库", systemImage: "books.vertical")
+                    }
+
+                settingsTab
+                    .tabItem {
+                        Label("设置", systemImage: "gearshape")
+                    }
+            }
+            .padding(16)
         }
         .frame(minWidth: 1080, minHeight: 720)
         .onAppear {
@@ -96,6 +110,8 @@ struct MainWindowView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .background(.clear)
 
                 HStack {
                     Button("重命名") {
@@ -115,6 +131,7 @@ struct MainWindowView: View {
                 .disabled(viewModel.selectedProject == nil)
             }
             .padding(16)
+            .background(glassCard)
         } detail: {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 12) {
@@ -214,19 +231,40 @@ struct MainWindowView: View {
                         }
                     }
                     .listStyle(.inset)
+                    .scrollContentBackground(.hidden)
+                    .background(.clear)
                 }
             }
             .padding(20)
+            .background(glassCard)
         }
+        .background(.clear)
     }
 
     private var settingsTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                GroupBox("面板行为") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(
+                            "固定快捷面板",
+                            isOn: Binding(
+                                get: { viewModel.isPanelPinned },
+                                set: { viewModel.setPanelPinned($0) }
+                            )
+                        )
+                        Text(viewModel.isPanelPinned ? "开启后，快捷面板会保持置顶，不会因为切到其他应用而自动收起。" : "关闭后，快捷面板仍会临时浮在最前，但失去焦点后会自动收起。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 GroupBox("全局快捷键") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("用于呼出或关闭快捷面板。")
+                        Text("用于呼出或关闭快捷面板，录制新的组合键后会立即生效。")
                             .foregroundStyle(.secondary)
+                        LabeledContent("当前组合键", value: viewModel.hotkeySummary())
                         KeyboardShortcuts.Recorder(for: .togglePanel)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -266,6 +304,7 @@ struct MainWindowView: View {
                 GroupBox("运行健康") {
                     VStack(alignment: .leading, spacing: 14) {
                         LabeledContent("当前版本", value: appVersionText)
+                        LabeledContent("更新状态", value: viewModel.updaterStatusMessage)
                         if let snapshot = viewModel.storageHealthSnapshot {
                             LabeledContent("数据库文件", value: snapshot.databaseURL.path)
                             LabeledContent("数据库大小", value: byteCountText(snapshot.databaseSizeBytes))
@@ -302,10 +341,14 @@ struct MainWindowView: View {
                             }
                             Button("刷新健康状态") {
                                 viewModel.refreshOperationalStatus()
+                                viewModel.refreshUpdaterStatus()
+                            }
+                            Button("检查更新") {
+                                viewModel.checkForUpdates()
                             }
                         }
 
-                        Text("自动更新当前未接入，生产发布请按本地 runbook 走“备份 -> 替换安装包 -> 回归 -> 保留最近 7 份备份”的手动流程。")
+                        Text("当前保留“本地打包 + 手动替换安装包 + 备份恢复”的发布兜底流程；Sparkle 仅在 feed 与公钥都配置完成后启用。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -345,6 +388,8 @@ struct MainWindowView: View {
             }
             .padding(20)
         }
+        .scrollContentBackground(.hidden)
+        .groupBoxStyle(GlassGroupBoxStyle())
     }
 
     private var projectDraftBinding: Binding<MainWindowViewModel.ProjectDraft>? {
@@ -455,6 +500,36 @@ struct MainWindowView: View {
         .padding(.vertical, 6)
         .background(Capsule().fill(Color.secondary.opacity(0.12)))
     }
+
+    private var glassCard: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 18, x: 0, y: 10)
+    }
+}
+
+private struct GlassGroupBoxStyle: GroupBoxStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            configuration.label
+                .font(.headline)
+            configuration.content
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.thinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.38), lineWidth: 1)
+                )
+        )
+    }
 }
 
 private struct ProjectSidebarRow: View {
@@ -504,9 +579,15 @@ private struct ExecutionLogRow: View {
                 if let observedAppTitle {
                     infoPill("粘贴前前台", value: observedAppTitle)
                 }
+                if let triggerSourceTitle {
+                    infoPill("触发方式", value: triggerSourceTitle)
+                }
                 infoPill("权限", value: log.hasAccessibility ? "已授权" : "未授权")
                 infoPill("复制", value: log.clipboardSuccess ? "成功" : "失败")
                 infoPill("自动粘贴", value: log.pasteAttempted ? (log.pasteSuccess ? "成功" : "失败") : "未尝试")
+                if let restoreWaitText {
+                    infoPill("回前台耗时", value: restoreWaitText)
+                }
                 if let durationText {
                     infoPill("耗时", value: durationText)
                 }
@@ -550,6 +631,28 @@ private struct ExecutionLogRow: View {
             return nil
         }
         return "\(totalDurationMs) ms"
+    }
+
+    private var restoreWaitText: String? {
+        guard let durationMs = log.targetAppRestoreDurationMs else {
+            return nil
+        }
+        return "\(durationMs) ms"
+    }
+
+    private var triggerSourceTitle: String? {
+        guard let triggerSource = log.triggerSource else {
+            return nil
+        }
+
+        switch triggerSource {
+        case Constants.ExecutionTrigger.keyboardSubmit.rawValue:
+            return "回车"
+        case Constants.ExecutionTrigger.pointerClick.rawValue:
+            return "点击"
+        default:
+            return triggerSource
+        }
     }
 
     private var failureReasonTitle: String? {

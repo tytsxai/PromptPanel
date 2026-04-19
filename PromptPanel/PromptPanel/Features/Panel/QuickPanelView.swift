@@ -19,13 +19,27 @@ struct QuickPanelView: View {
         .padding(16)
         .frame(width: 680, height: 460)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.10))
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.18),
+                                Color.white.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 12)
     }
 
     private var header: some View {
@@ -44,6 +58,16 @@ struct QuickPanelView: View {
 
                 Spacer()
 
+                Button {
+                    viewModel.setPanelPinned(!appState.isPanelPinned)
+                } label: {
+                    Label(appState.isPanelPinned ? "已固定" : "固定", systemImage: appState.isPanelPinned ? "pin.fill" : "pin")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help(appState.isPanelPinned ? "当前面板会持续置顶显示" : "点击后让面板持续置顶显示")
+
                 Text(hotkeyHintText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -57,7 +81,7 @@ struct QuickPanelView: View {
                 placeholder: "搜索标题或内容",
                 focusToken: viewModel.focusToken,
                 onMoveSelection: viewModel.moveSelection,
-                onSubmit: { viewModel.executeSelection() },
+                onSubmit: { viewModel.executeSelection(triggerSource: .keyboardSubmit) },
                 onEscape: viewModel.closePanel,
                 onFocusResolved: viewModel.handleSearchFieldFocus
             )
@@ -88,6 +112,7 @@ struct QuickPanelView: View {
                     proxy.scrollTo(selectedEntry.id, anchor: .center)
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -111,7 +136,7 @@ struct QuickPanelView: View {
 
         return Button {
             viewModel.selectEntry(at: index)
-            viewModel.executeSelection(force: true)
+            viewModel.executeSelection(force: true, triggerSource: .pointerClick)
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {

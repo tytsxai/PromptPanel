@@ -1,9 +1,15 @@
 import Foundation
 import Cocoa
 
+@MainActor
+protocol AccessibilityPermissionProviding: AnyObject {
+    var isAccessibilityGranted: Bool { get }
+    func refresh()
+}
+
 /// Service responsible for detecting and guiding accessibility permission.
 @MainActor
-final class PermissionService: ObservableObject {
+final class PermissionService: ObservableObject, AccessibilityPermissionProviding {
 
     @Published private(set) var isAccessibilityGranted: Bool = false
 

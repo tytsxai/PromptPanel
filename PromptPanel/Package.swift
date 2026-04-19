@@ -10,8 +10,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts.git", exact: "1.10.0"),
-        // Sparkle will be added in Step 14 (Release)
-        // .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.0.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.9.1"),
     ],
     targets: [
         .executableTarget(
@@ -19,6 +18,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "PromptPanel",
             exclude: [

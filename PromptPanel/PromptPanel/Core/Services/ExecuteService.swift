@@ -9,14 +9,19 @@ import Cocoa
 /// 5. Handle success/failure
 @MainActor
 final class ExecuteService {
+    struct TargetApplicationRestoreResult {
+        let observedBundleId: String?
+        let durationMs: Int
+    }
 
-    private let clipboardService: ClipboardService
-    private let pasteService: PasteService
+    private let clipboardService: ClipboardWriting
+    private let pasteService: PasteDispatching
     private let entryRepository: EntryRepository
     private let logRepository: LogRepository
-    private let permissionService: PermissionService
+    private let permissionService: AccessibilityPermissionProviding
     private let targetApplicationProvider: () -> String?
     private let currentFrontApplicationProvider: () -> String?
+    private var isExecuting = false
 
     /// Callback to close/hide the panel before pasting.
     var onClosePanel: (() -> Void)?
@@ -25,11 +30,11 @@ final class ExecuteService {
     var onShowNotification: ((String, Bool) -> Void)?
 
     init(
-        clipboardService: ClipboardService,
-        pasteService: PasteService,
+        clipboardService: ClipboardWriting,
+        pasteService: PasteDispatching,
         entryRepository: EntryRepository,
         logRepository: LogRepository,
-        permissionService: PermissionService,
+        permissionService: AccessibilityPermissionProviding,
         targetApplicationProvider: @escaping () -> String?,
         currentFrontApplicationProvider: @escaping () -> String?
     ) {
@@ -43,8 +48,17 @@ final class ExecuteService {
     }
 
     /// Execute an entry: clipboard → close panel → auto-paste → fallback.
-    func execute(entry: Entry, currentProjectId: String) {
-        PPLogger.execute.info("Executing entry: \(entry.id)")
+    func execute(entry: Entry, currentProjectId: String, triggerSource: Constants.ExecutionTrigger) {
+        guard isExecuting == false else {
+            PPLogger.execute.warning(
+                "Ignored execute request because another execution is still in flight: entry=\(entry.id), trigger=\(triggerSource.rawValue)"
+            )
+            return
+        }
+        isExecuting = true
+        PPLogger.execute.info(
+            "Executing entry: \(entry.id), trigger=\(triggerSource.rawValue), project=\(currentProjectId)"
+        )
         let startTime = DispatchTime.now().uptimeNanoseconds
 
         // Get the frontmost app bundle ID BEFORE we do anything
@@ -65,10 +79,13 @@ final class ExecuteService {
                 pasteAttempted: false,
                 pasteSuccess: false,
                 result: .failed,
+                triggerSource: triggerSource,
                 failureReason: .clipboardWriteFailed,
+                targetAppRestoreDurationMs: nil,
                 totalDurationMs: elapsedMilliseconds(since: startTime)
             )
             onShowNotification?("复制失败，请重试", false)
+            isExecuting = false
             return
         }
 
@@ -77,20 +94,26 @@ final class ExecuteService {
 
         Task { [weak self] in
             guard let self else { return }
-            let observedAppBundleId = await self.waitForTargetApplicationRestore(expectedBundleId: frontAppBundleId)
+            let restoreResult = await self.waitForTargetApplicationRestore(expectedBundleId: frontAppBundleId)
             self.performPaste(
                 entry: entry,
                 projectId: currentProjectId,
                 frontAppBundleId: frontAppBundleId,
-                observedAppBundleId: observedAppBundleId,
+                restoreResult: restoreResult,
+                triggerSource: triggerSource,
                 startTime: startTime
             )
+            self.isExecuting = false
         }
     }
 
-    private func waitForTargetApplicationRestore(expectedBundleId: String?) async -> String? {
+    private func waitForTargetApplicationRestore(expectedBundleId: String?) async -> TargetApplicationRestoreResult {
+        let waitStartedAt = DispatchTime.now().uptimeNanoseconds
         guard let expectedBundleId else {
-            return currentFrontApplicationProvider()
+            return TargetApplicationRestoreResult(
+                observedBundleId: currentFrontApplicationProvider(),
+                durationMs: elapsedMilliseconds(since: waitStartedAt)
+            )
         }
 
         var observedBundleId = currentFrontApplicationProvider()
@@ -103,14 +126,22 @@ final class ExecuteService {
             observedBundleId = currentFrontApplicationProvider()
         }
 
-        return observedBundleId
+        let durationMs = elapsedMilliseconds(since: waitStartedAt)
+        PPLogger.execute.info(
+            "target_app_restore_completed expected=\(expectedBundleId) observed=\(observedBundleId ?? "unknown") duration_ms=\(durationMs)"
+        )
+        return TargetApplicationRestoreResult(
+            observedBundleId: observedBundleId,
+            durationMs: durationMs
+        )
     }
 
     private func performPaste(
         entry: Entry,
         projectId: String,
         frontAppBundleId: String?,
-        observedAppBundleId: String?,
+        restoreResult: TargetApplicationRestoreResult,
+        triggerSource: Constants.ExecutionTrigger,
         startTime: UInt64
     ) {
         // Step 3: Check accessibility permission
@@ -124,12 +155,14 @@ final class ExecuteService {
                 entry: entry,
                 projectId: projectId,
                 frontAppBundleId: frontAppBundleId,
-                observedAppBundleId: observedAppBundleId,
+                observedAppBundleId: restoreResult.observedBundleId,
                 clipboardSuccess: true,
                 pasteAttempted: false,
                 pasteSuccess: false,
                 result: .clipboardOnly,
+                triggerSource: triggerSource,
                 failureReason: .accessibilityNotGranted,
+                targetAppRestoreDurationMs: restoreResult.durationMs,
                 totalDurationMs: elapsedMilliseconds(since: startTime)
             )
             recordUsage(entry: entry)
@@ -137,20 +170,22 @@ final class ExecuteService {
             return
         }
 
-        if Self.isTargetApplicationRestoreMismatch(expectedBundleId: frontAppBundleId, observedBundleId: observedAppBundleId) {
+        if Self.isTargetApplicationRestoreMismatch(expectedBundleId: frontAppBundleId, observedBundleId: restoreResult.observedBundleId) {
             PPLogger.execute.warning(
-                "Target app not restored before paste: expected=\(frontAppBundleId ?? "unknown"), observed=\(observedAppBundleId ?? "unknown")"
+                "Target app not restored before paste: expected=\(frontAppBundleId ?? "unknown"), observed=\(restoreResult.observedBundleId ?? "unknown"), duration_ms=\(restoreResult.durationMs)"
             )
             logExecution(
                 entry: entry,
                 projectId: projectId,
                 frontAppBundleId: frontAppBundleId,
-                observedAppBundleId: observedAppBundleId,
+                observedAppBundleId: restoreResult.observedBundleId,
                 clipboardSuccess: true,
                 pasteAttempted: false,
                 pasteSuccess: false,
                 result: .clipboardOnly,
+                triggerSource: triggerSource,
                 failureReason: .targetAppNotRestored,
+                targetAppRestoreDurationMs: restoreResult.durationMs,
                 totalDurationMs: elapsedMilliseconds(since: startTime)
             )
             recordUsage(entry: entry)
@@ -168,11 +203,13 @@ final class ExecuteService {
                 entry: entry,
                 projectId: projectId,
                 frontAppBundleId: frontAppBundleId,
-                observedAppBundleId: observedAppBundleId,
+                observedAppBundleId: restoreResult.observedBundleId,
                 clipboardSuccess: true,
                 pasteAttempted: true,
                 pasteSuccess: true,
                 result: .success,
+                triggerSource: triggerSource,
+                targetAppRestoreDurationMs: restoreResult.durationMs,
                 totalDurationMs: elapsedMilliseconds(since: startTime)
             )
             recordUsage(entry: entry)
@@ -183,12 +220,14 @@ final class ExecuteService {
                 entry: entry,
                 projectId: projectId,
                 frontAppBundleId: frontAppBundleId,
-                observedAppBundleId: observedAppBundleId,
+                observedAppBundleId: restoreResult.observedBundleId,
                 clipboardSuccess: true,
                 pasteAttempted: true,
                 pasteSuccess: false,
                 result: .clipboardOnly,
+                triggerSource: triggerSource,
                 failureReason: .accessibilityNotGranted,
+                targetAppRestoreDurationMs: restoreResult.durationMs,
                 totalDurationMs: elapsedMilliseconds(since: startTime)
             )
             recordUsage(entry: entry)
@@ -199,12 +238,14 @@ final class ExecuteService {
                 entry: entry,
                 projectId: projectId,
                 frontAppBundleId: frontAppBundleId,
-                observedAppBundleId: observedAppBundleId,
+                observedAppBundleId: restoreResult.observedBundleId,
                 clipboardSuccess: true,
                 pasteAttempted: true,
                 pasteSuccess: false,
                 result: .clipboardOnly,
+                triggerSource: triggerSource,
                 failureReason: .pasteEventCreationFailed,
+                targetAppRestoreDurationMs: restoreResult.durationMs,
                 totalDurationMs: elapsedMilliseconds(since: startTime)
             )
             recordUsage(entry: entry)
@@ -237,7 +278,9 @@ final class ExecuteService {
         pasteAttempted: Bool,
         pasteSuccess: Bool,
         result: Constants.ExecutionResult,
+        triggerSource: Constants.ExecutionTrigger,
         failureReason: Constants.ExecutionFailureReason? = nil,
+        targetAppRestoreDurationMs: Int? = nil,
         totalDurationMs: Int? = nil
     ) {
         let log = ExecutionLog(
@@ -250,7 +293,9 @@ final class ExecuteService {
             pasteAttempted: pasteAttempted,
             pasteSuccess: pasteSuccess,
             result: result.rawValue,
+            triggerSource: triggerSource.rawValue,
             failureReason: failureReason?.rawValue,
+            targetAppRestoreDurationMs: targetAppRestoreDurationMs,
             totalDurationMs: totalDurationMs
         )
         do {

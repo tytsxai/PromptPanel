@@ -24,8 +24,12 @@ struct ExecutionLog: Identifiable, Codable {
     var pasteSuccess: Bool
     /// Final execution result.
     var result: String
+    /// How the execution was triggered from the panel.
+    var triggerSource: String?
     /// More precise failure classification for clipboard fallback or failures.
     var failureReason: String?
+    /// How long we waited for the original target app to restore focus.
+    var targetAppRestoreDurationMs: Int?
     /// Total execution duration in milliseconds.
     var totalDurationMs: Int?
     /// Execution timestamp.
@@ -42,7 +46,9 @@ struct ExecutionLog: Identifiable, Codable {
         pasteAttempted: Bool,
         pasteSuccess: Bool,
         result: String,
+        triggerSource: String? = nil,
         failureReason: String? = nil,
+        targetAppRestoreDurationMs: Int? = nil,
         totalDurationMs: Int? = nil,
         createdAt: Date = Date()
     ) {
@@ -56,7 +62,9 @@ struct ExecutionLog: Identifiable, Codable {
         self.pasteAttempted = pasteAttempted
         self.pasteSuccess = pasteSuccess
         self.result = result
+        self.triggerSource = triggerSource
         self.failureReason = failureReason
+        self.targetAppRestoreDurationMs = targetAppRestoreDurationMs
         self.totalDurationMs = totalDurationMs
         self.createdAt = createdAt
     }
@@ -72,7 +80,9 @@ struct ExecutionLog: Identifiable, Codable {
         case pasteAttempted = "paste_attempted"
         case pasteSuccess = "paste_success"
         case result
+        case triggerSource = "trigger_source"
         case failureReason = "failure_reason"
+        case targetAppRestoreDurationMs = "target_app_restore_duration_ms"
         case totalDurationMs = "total_duration_ms"
         case createdAt = "created_at"
     }
@@ -94,7 +104,9 @@ extension ExecutionLog: FetchableRecord, PersistableRecord {
         case pasteAttempted = "paste_attempted"
         case pasteSuccess = "paste_success"
         case result
+        case triggerSource = "trigger_source"
         case failureReason = "failure_reason"
+        case targetAppRestoreDurationMs = "target_app_restore_duration_ms"
         case totalDurationMs = "total_duration_ms"
         case createdAt = "created_at"
     }

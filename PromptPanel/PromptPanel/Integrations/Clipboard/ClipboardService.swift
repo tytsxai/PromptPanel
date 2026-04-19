@@ -1,7 +1,12 @@
 import Cocoa
 
+protocol ClipboardWriting {
+    @discardableResult
+    func writeText(_ text: String) -> Bool
+}
+
 /// Manages clipboard read/write operations.
-final class ClipboardService {
+final class ClipboardService: ClipboardWriting {
 
     /// Write text content to the system clipboard.
     /// - Returns: true if successful, false otherwise.

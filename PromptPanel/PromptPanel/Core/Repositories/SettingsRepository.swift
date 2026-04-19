@@ -38,4 +38,32 @@ final class SettingsRepository: @unchecked Sendable {
         try set(Constants.SettingsKey.currentProjectId, value: id)
         PPLogger.project.info("Current project set to: \(id)")
     }
+
+    func getBool(_ key: String, default defaultValue: Bool = false) throws -> Bool {
+        guard let rawValue = try get(key) else {
+            return defaultValue
+        }
+
+        switch rawValue.lowercased() {
+        case "1", "true", "yes", "on":
+            return true
+        case "0", "false", "no", "off":
+            return false
+        default:
+            return defaultValue
+        }
+    }
+
+    func setBool(_ key: String, value: Bool) throws {
+        try set(key, value: value ? "1" : "0")
+    }
+
+    func isPanelPinned() throws -> Bool {
+        try getBool(Constants.SettingsKey.panelPinned)
+    }
+
+    func setPanelPinned(_ isPinned: Bool) throws {
+        try setBool(Constants.SettingsKey.panelPinned, value: isPinned)
+        PPLogger.panel.info("Panel pinned set to: \(isPinned)")
+    }
 }

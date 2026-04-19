@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var pasteService: PasteService!
     private var loginItemService: LoginItemService!
     private var storageMaintenanceService: StorageMaintenanceService!
+    private var updaterService: UpdaterService!
 
     private var executeService: ExecuteService!
     private var entrySearchService: EntrySearchService!
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try initializeDependencies()
             try wireApplication()
             scheduleLaunchMaintenance()
+            updaterService.start()
             permissionService.requestPermission()
             refreshPermissionState()
             schedulePanelAutoOpenForQAIfNeeded()
@@ -78,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         loginItemService = LoginItemService()
         toastService = ToastService()
         panelOpenTracker = PanelOpenTracker()
+        updaterService = UpdaterService()
         storageMaintenanceService = StorageMaintenanceService(
             dbQueue: databaseManager.dbQueue,
             logRepository: logRepository,
@@ -86,10 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let currentProjectId = try settingsRepository.getCurrentProjectId()
         let defaultProject = try projectRepository.fetchDefault()
+        let isPanelPinned = try settingsRepository.isPanelPinned()
 
         appState.loadPersistedState(
             currentProjectId: currentProjectId,
-            defaultProjectId: defaultProject?.id
+            defaultProjectId: defaultProject?.id,
+            isPanelPinned: isPanelPinned
         )
     }
 
@@ -125,6 +130,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             executeService: executeService,
             permissionService: permissionService,
             panelOpenTracker: panelOpenTracker,
+            onSetPanelPinned: { [weak self] isPinned in
+                self?.updatePanelPinnedState(isPinned) ?? false
+            },
             onClosePanel: { [weak self] in
                 self?.panelService.hide()
             }
@@ -139,7 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             permissionService: permissionService,
             loginItemService: loginItemService,
             storageMaintenanceService: storageMaintenanceService,
-            launchRecoveryReport: databaseManager.launchRecoveryReport
+            updaterService: updaterService,
+            launchRecoveryReport: databaseManager.launchRecoveryReport,
+            onSetPanelPinned: { [weak self] isPinned in
+                self?.updatePanelPinnedState(isPinned) ?? false
+            }
         )
 
         panelService.contentViewProvider = { [weak self] in
@@ -228,6 +240,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.center()
             window.contentView = NSHostingView(rootView: contentView)
             window.isReleasedWhenClosed = false
+            window.titlebarAppearsTransparent = true
+            window.isMovableByWindowBackground = true
+            window.backgroundColor = .clear
+            window.isOpaque = false
             window.delegate = self
             mainWindow = window
         }
@@ -242,6 +258,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func refreshPermissionState() {
         permissionService.refresh()
         appState.hasAccessibilityPermission = permissionService.isAccessibilityGranted
+    }
+
+    private func updatePanelPinnedState(_ isPinned: Bool) -> Bool {
+        do {
+            try settingsRepository.setPanelPinned(isPinned)
+            panelService.setPinned(isPinned)
+            return true
+        } catch {
+            PPLogger.panel.error("Failed to persist panel pinned state: \(error.localizedDescription)")
+            return false
+        }
     }
 
     private func presentLaunchRecoveryAlertIfNeeded() {

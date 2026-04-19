@@ -101,6 +101,19 @@ final class PanelService {
         targetApplication?.bundleIdentifier
     }
 
+    func setPinned(_ isPinned: Bool) {
+        appState.isPanelPinned = isPinned
+
+        guard let panel else {
+            return
+        }
+
+        applyPinnedWindowBehavior(to: panel)
+        if isPinned, panel.isVisible {
+            bringPanelToFront(panel)
+        }
+    }
+
     /// Create the NSPanel with proper configuration.
     private func createPanel() {
         let panel = QuickPanelWindow(
@@ -113,16 +126,13 @@ final class PanelService {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.level = .floating
-        panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = false
-        panel.hidesOnDeactivate = false
         panel.animationBehavior = .utilityWindow
-        panel.collectionBehavior = [.transient, .ignoresCycle, .moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        applyPinnedWindowBehavior(to: panel)
 
         configureWindowButtons(for: panel)
 
@@ -132,9 +142,14 @@ final class PanelService {
         }
 
         // Handle Esc key and click-outside
-        let delegate = PanelDelegate(onClose: { [weak self] in
-            self?.hide()
-        })
+        let delegate = PanelDelegate(
+            onClose: { [weak self] in
+                self?.hide()
+            },
+            shouldCloseOnDeactivate: { [weak self] in
+                self?.appState.isPanelPinned == false
+            }
+        )
         panel.delegate = delegate
 
         self.panel = panel
@@ -170,6 +185,20 @@ final class PanelService {
         ])
 
         return backgroundView
+    }
+
+    private func applyPinnedWindowBehavior(to panel: NSPanel) {
+        if appState.isPanelPinned {
+            panel.level = .statusBar
+            panel.isFloatingPanel = true
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        } else {
+            panel.level = .floating
+            panel.isFloatingPanel = true
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.transient, .ignoresCycle, .moveToActiveSpace, .fullScreenAuxiliary]
+        }
     }
 
     private func reactivateTargetApplication() {
@@ -285,10 +314,12 @@ final class PanelService {
 private class PanelDelegate: NSObject, NSWindowDelegate {
 
     let onClose: () -> Void
+    let shouldCloseOnDeactivate: () -> Bool
     private let resignCloseDelayMs = 80
 
-    init(onClose: @escaping () -> Void) {
+    init(onClose: @escaping () -> Void, shouldCloseOnDeactivate: @escaping () -> Bool) {
         self.onClose = onClose
+        self.shouldCloseOnDeactivate = shouldCloseOnDeactivate
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -309,6 +340,9 @@ private class PanelDelegate: NSObject, NSWindowDelegate {
                 return
             }
             guard NSApp.isActive == false else {
+                return
+            }
+            guard self.shouldCloseOnDeactivate() else {
                 return
             }
             self.onClose()

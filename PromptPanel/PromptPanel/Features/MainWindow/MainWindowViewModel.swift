@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import KeyboardShortcuts
 
 @MainActor
 final class MainWindowViewModel: ObservableObject {
@@ -58,6 +59,8 @@ final class MainWindowViewModel: ObservableObject {
     @Published private(set) var recentExecutionLogs: [ExecutionLog] = []
     @Published private(set) var storageHealthSnapshot: StorageHealthSnapshot?
     @Published private(set) var executionHealthSummary: LogRepository.HealthSummary?
+    @Published private(set) var updaterStatusMessage: String = "自动更新未初始化。"
+    @Published private(set) var canCheckForUpdates: Bool = false
     @Published var selectedProjectId: String = MainWindowViewModel.allProjectsSelection {
         didSet {
             scheduleEntriesRefresh(delayMs: 0)
@@ -75,6 +78,7 @@ final class MainWindowViewModel: ObservableObject {
     @Published var hasAccessibilityPermission: Bool = false
     @Published var launchAtLoginEnabled: Bool = false
     @Published var bannerMessage: String?
+    @Published var isPanelPinned: Bool = false
 
     private let appState: AppState
     private let projectRepository: ProjectRepository
@@ -84,7 +88,9 @@ final class MainWindowViewModel: ObservableObject {
     private let permissionService: PermissionService
     private let loginItemService: LoginItemService
     private let storageMaintenanceService: StorageMaintenanceService
+    private let updaterService: UpdaterService
     private let launchRecoveryReport: LaunchRecoveryReport?
+    private let onSetPanelPinned: (Bool) -> Bool
     private var cancellables = Set<AnyCancellable>()
     private let entriesLoadQueue = DispatchQueue(label: "PromptPanel.main-window.entries", qos: .userInitiated)
     private var pendingEntriesRefreshWorkItem: DispatchWorkItem?
@@ -99,7 +105,9 @@ final class MainWindowViewModel: ObservableObject {
         permissionService: PermissionService,
         loginItemService: LoginItemService,
         storageMaintenanceService: StorageMaintenanceService,
-        launchRecoveryReport: LaunchRecoveryReport?
+        updaterService: UpdaterService,
+        launchRecoveryReport: LaunchRecoveryReport?,
+        onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false }
     ) {
         self.appState = appState
         self.projectRepository = projectRepository
@@ -109,7 +117,9 @@ final class MainWindowViewModel: ObservableObject {
         self.permissionService = permissionService
         self.loginItemService = loginItemService
         self.storageMaintenanceService = storageMaintenanceService
+        self.updaterService = updaterService
         self.launchRecoveryReport = launchRecoveryReport
+        self.onSetPanelPinned = onSetPanelPinned
 
         observeChanges()
     }
@@ -136,6 +146,7 @@ final class MainWindowViewModel: ObservableObject {
         scheduleEntriesRefresh(delayMs: 0)
         refreshLogs()
         refreshOperationalStatus()
+        refreshUpdaterStatus()
         if let launchRecoveryReport {
             bannerMessage = launchRecoveryReport.userFacingMessage
         }
@@ -145,6 +156,24 @@ final class MainWindowViewModel: ObservableObject {
         permissionService.refresh()
         hasAccessibilityPermission = permissionService.isAccessibilityGranted
         launchAtLoginEnabled = loginItemService.isEnabled
+        isPanelPinned = appState.isPanelPinned
+    }
+
+    func setPanelPinned(_ isPinned: Bool) {
+        guard onSetPanelPinned(isPinned) else {
+            self.isPanelPinned = appState.isPanelPinned
+            bannerMessage = "固定状态保存失败，请重试。"
+            return
+        }
+        self.isPanelPinned = appState.isPanelPinned
+        bannerMessage = self.isPanelPinned ? "快捷面板已固定置顶。" : "快捷面板已恢复临时置顶。"
+    }
+
+    func hotkeySummary() -> String {
+        guard let shortcut = KeyboardShortcuts.Name.togglePanel.shortcut else {
+            return "未设置快捷键"
+        }
+        return shortcut.description
     }
 
     func refreshLogs() {
@@ -166,6 +195,11 @@ final class MainWindowViewModel: ObservableObject {
             PPLogger.database.error("Failed to refresh operational status: \(error.localizedDescription)")
             bannerMessage = "加载运行健康信息失败。"
         }
+    }
+
+    func refreshUpdaterStatus() {
+        updaterStatusMessage = updaterService.statusMessage
+        canCheckForUpdates = updaterService.canCheckForUpdates
     }
 
     func cleanupLogs(olderThanDays days: Int = 30) {
@@ -231,6 +265,11 @@ final class MainWindowViewModel: ObservableObject {
 
     func openBackupDirectory() {
         storageMaintenanceService.openBackupDirectory()
+    }
+
+    func checkForUpdates() {
+        bannerMessage = updaterService.checkForUpdates()
+        refreshUpdaterStatus()
     }
 
     func setCurrentProjectToSelected() {
@@ -418,6 +457,13 @@ final class MainWindowViewModel: ObservableObject {
     }
 
     private func observeChanges() {
+        appState.$isPanelPinned
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isPinned in
+                self?.isPanelPinned = isPinned
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .projectsDidChange)
             .sink { [weak self] _ in
                 self?.loadProjects()

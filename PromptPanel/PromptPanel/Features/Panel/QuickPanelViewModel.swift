@@ -28,6 +28,7 @@ final class QuickPanelViewModel: ObservableObject {
     private let executeService: ExecuteService
     private let permissionService: PermissionService
     private let panelOpenTracker: PanelOpenTracker?
+    private let onSetPanelPinned: (Bool) -> Bool
     private let onClosePanel: () -> Void
     private var cancellables = Set<AnyCancellable>()
     private let searchQueue = DispatchQueue(label: "PromptPanel.quick-panel.search", qos: .userInitiated)
@@ -42,6 +43,7 @@ final class QuickPanelViewModel: ObservableObject {
         executeService: ExecuteService,
         permissionService: PermissionService,
         panelOpenTracker: PanelOpenTracker? = nil,
+        onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false },
         onClosePanel: @escaping () -> Void
     ) {
         self.appState = appState
@@ -51,6 +53,7 @@ final class QuickPanelViewModel: ObservableObject {
         self.executeService = executeService
         self.permissionService = permissionService
         self.panelOpenTracker = panelOpenTracker
+        self.onSetPanelPinned = onSetPanelPinned
         self.onClosePanel = onClosePanel
         self.currentProjectId = appState.effectiveProjectId
 
@@ -101,6 +104,14 @@ final class QuickPanelViewModel: ObservableObject {
         onClosePanel()
     }
 
+    func setPanelPinned(_ isPinned: Bool) {
+        guard onSetPanelPinned(isPinned) else {
+            statusMessage = "固定状态保存失败，请重试。"
+            return
+        }
+        statusMessage = nil
+    }
+
     func moveSelection(_ direction: SelectionDirection) {
         guard !entries.isEmpty else {
             return
@@ -121,16 +132,31 @@ final class QuickPanelViewModel: ObservableObject {
         selectedIndex = index
     }
 
-    func executeSelection(force: Bool = false) {
+    func executeSelection(
+        force: Bool = false,
+        triggerSource: Constants.ExecutionTrigger = .keyboardSubmit
+    ) {
+        PPLogger.panel.info(
+            "execute_selection_requested trigger=\(triggerSource.rawValue) ready=\(self.isExecutionReady) force=\(force) selected_index=\(self.selectedIndex) entry_count=\(self.entries.count)"
+        )
         guard force || isExecutionReady else {
-            PPLogger.panel.warning("Ignored executeSelection because panel is not ready for execution yet")
+            PPLogger.panel.warning(
+                "execute_selection_blocked trigger=\(triggerSource.rawValue) reason=panel_not_ready focus_token=\(self.focusToken)"
+            )
             return
         }
         guard let entry = selectedEntry else {
+            PPLogger.panel.warning(
+                "execute_selection_blocked trigger=\(triggerSource.rawValue) reason=no_selection selected_index=\(self.selectedIndex) entry_count=\(self.entries.count)"
+            )
             return
         }
 
-        executeService.execute(entry: entry, currentProjectId: currentProjectId)
+        executeService.execute(
+            entry: entry,
+            currentProjectId: currentProjectId,
+            triggerSource: triggerSource
+        )
     }
 
     func activateProject(_ id: String) {
@@ -258,6 +284,7 @@ final class QuickPanelViewModel: ObservableObject {
                 return
             }
             self.isExecutionReady = true
+            PPLogger.panel.info("execute_selection_unlocked focus_token=\(token) delay_ms=\(Constants.panelExecutionUnlockDelayMs)")
         }
     }
 }

@@ -18,6 +18,7 @@ final class AppState: ObservableObject {
     // MARK: - Panel State
 
     @Published var isPanelVisible: Bool = false
+    @Published var isPanelPinned: Bool = false
 
     // MARK: - Main Window State
 
@@ -34,10 +35,13 @@ final class AppState: ObservableObject {
     }
 
     /// Called once after database is ready to load persisted state.
-    func loadPersistedState(currentProjectId: String?, defaultProjectId: String?) {
+    func loadPersistedState(currentProjectId: String?, defaultProjectId: String?, isPanelPinned: Bool = false) {
         self.currentProjectId = currentProjectId
         self.defaultProjectId = defaultProjectId
-        PPLogger.app.info("Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil")")
+        self.isPanelPinned = isPanelPinned
+        PPLogger.app.info(
+            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned)"
+        )
     }
 
     /// The effective project ID for panel display.

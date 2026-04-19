@@ -45,6 +45,9 @@ struct KeyAwareSearchField: NSViewRepresentable {
             nsView.stringValue = text
         }
 
+        context.coordinator.onMoveSelection = onMoveSelection
+        context.coordinator.onSubmit = onSubmit
+        context.coordinator.onEscape = onEscape
         context.coordinator.focusResolveHandler = onFocusResolved
 
         if context.coordinator.lastFocusToken != focusToken {
@@ -65,6 +68,9 @@ struct KeyAwareSearchField: NSViewRepresentable {
         @Binding var text: String
         var lastFocusToken: Int = -1
         var focusResolveHandler: ((PanelFocusResult) -> Void)?
+        var onMoveSelection: ((QuickPanelViewModel.SelectionDirection) -> Void)?
+        var onSubmit: (() -> Void)?
+        var onEscape: (() -> Void)?
         private var reportedSuccessfulFocusToken: Int = -1
 
         init(text: Binding<String>) {
@@ -83,6 +89,29 @@ struct KeyAwareSearchField: NSViewRepresentable {
                 return
             }
             text = field.stringValue
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.moveUp(_:)):
+                onMoveSelection?(.up)
+                return true
+            case #selector(NSResponder.moveDown(_:)):
+                onMoveSelection?(.down)
+                return true
+            case #selector(NSResponder.insertNewline(_:)):
+                onSubmit?()
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                onEscape?()
+                return true
+            default:
+                return false
+            }
         }
 
         func scheduleFocus(

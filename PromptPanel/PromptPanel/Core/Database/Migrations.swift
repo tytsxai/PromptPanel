@@ -8,6 +8,7 @@ enum Migrations {
     static func registerAll(_ migrator: inout DatabaseMigrator) {
         registerV1(migrator: &migrator)
         registerV2ExecutionLogDiagnostics(migrator: &migrator)
+        registerV3ExecutionLogInteractionDiagnostics(migrator: &migrator)
     }
 
     // MARK: - V1: Initial Schema
@@ -119,6 +120,17 @@ enum Migrations {
                 t.add(column: "observed_app_bundle_id", .text)
                 t.add(column: "failure_reason", .text)
                 t.add(column: "total_duration_ms", .integer)
+            }
+        }
+    }
+
+    private static func registerV3ExecutionLogInteractionDiagnostics(migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("v3_execution_log_interaction_diagnostics") { db in
+            PPLogger.database.info("Running migration: v3_execution_log_interaction_diagnostics")
+
+            try db.alter(table: "execution_logs") { t in
+                t.add(column: "trigger_source", .text)
+                t.add(column: "target_app_restore_duration_ms", .integer)
             }
         }
     }

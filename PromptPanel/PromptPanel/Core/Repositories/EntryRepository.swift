@@ -100,12 +100,7 @@ final class EntryRepository: @unchecked Sendable {
         }
 
         return try dbQueue.read { db in
-            // Escape the query for FTS5: wrap each token with double quotes
-            let escapedQuery = trimmed
-                .components(separatedBy: .whitespaces)
-                .filter { !$0.isEmpty }
-                .map { "\"\($0)\"*" }
-                .joined(separator: " ")
+            let escapedQuery = Self.makeFTS5PrefixQuery(from: trimmed)
 
             let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
             let orderByProjectPriority = currentProjectId == nil ? "" : ", project_priority ASC"
@@ -134,6 +129,20 @@ final class EntryRepository: @unchecked Sendable {
                 Entry(row: row)
             }
         }
+    }
+
+    private static func makeFTS5PrefixQuery(from rawQuery: String) -> String {
+        rawQuery
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+            .filter { !$0.isEmpty }
+            .map { token in
+                // FTS5 uses double quotes for phrase literals; escape embedded quotes so
+                // searches like foo"bar do not fail the whole query.
+                let escapedToken = token.replacingOccurrences(of: "\"", with: "\"\"")
+                return "\"\(escapedToken)\"*"
+            }
+            .joined(separator: " ")
     }
 
     /// Fetch a single entry by ID.

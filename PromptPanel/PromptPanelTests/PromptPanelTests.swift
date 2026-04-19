@@ -22,6 +22,19 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(try settingsRepository.getCurrentProjectId(), defaultProject.id)
     }
 
+    func testPanelPinnedSettingRoundTrips() throws {
+        let databaseManager = try makeDatabaseManager()
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+
+        XCTAssertFalse(try settingsRepository.isPanelPinned())
+
+        try settingsRepository.setPanelPinned(true)
+        XCTAssertTrue(try settingsRepository.isPanelPinned())
+
+        try settingsRepository.setPanelPinned(false)
+        XCTAssertFalse(try settingsRepository.isPanelPinned())
+    }
+
     func testMixedEntriesPreferCurrentProjectWhenSortKeysEqual() throws {
         let databaseManager = try makeDatabaseManager()
         let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -157,6 +170,31 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(Set(results.map(\.projectId)), Set([defaultProject.id, currentProject.id]))
     }
 
+    func testEntrySearchEscapesQuotedTokens() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let searchService = EntrySearchService(entryRepository: entryRepository)
+
+        try entryRepository.create(
+            Entry(
+                projectId: defaultProject.id,
+                title: #"He said "hello""#,
+                content: "Quoted content"
+            )
+        )
+
+        let results = try searchService.search(
+            query: #""hello""#,
+            currentProjectId: defaultProject.id,
+            defaultProjectId: defaultProject.id
+        )
+
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.title, #"He said "hello""#)
+    }
+
     func testExecutionLogPersistsFailureReasonAndDiagnostics() throws {
         let databaseManager = try makeDatabaseManager()
         let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
@@ -171,7 +209,9 @@ final class PromptPanelTests: XCTestCase {
             pasteAttempted: false,
             pasteSuccess: false,
             result: Constants.ExecutionResult.clipboardOnly.rawValue,
+            triggerSource: Constants.ExecutionTrigger.keyboardSubmit.rawValue,
             failureReason: Constants.ExecutionFailureReason.targetAppNotRestored.rawValue,
+            targetAppRestoreDurationMs: 86,
             totalDurationMs: 143
         )
 
@@ -180,8 +220,139 @@ final class PromptPanelTests: XCTestCase {
         let persisted = try XCTUnwrap(recentLogs.first)
 
         XCTAssertEqual(persisted.failureReason, Constants.ExecutionFailureReason.targetAppNotRestored.rawValue)
+        XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.keyboardSubmit.rawValue)
+        XCTAssertEqual(persisted.targetAppRestoreDurationMs, 86)
         XCTAssertEqual(persisted.totalDurationMs, 143)
         XCTAssertEqual(persisted.observedAppBundleId, Bundle.main.bundleIdentifier)
+    }
+
+    @MainActor
+    func testExecuteServiceLogsAccessibilityFallback() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let entry = Entry(projectId: defaultProject.id, title: "Prompt", content: "Copy me")
+        try entryRepository.create(entry)
+        let pasteDispatcher = FakePasteDispatcher(result: .dispatched)
+
+        let service = ExecuteService(
+            clipboardService: FakeClipboardWriter(success: true),
+            pasteService: pasteDispatcher,
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: FakePermissionProvider(isAccessibilityGranted: false),
+            targetApplicationProvider: { "com.google.Chrome" },
+            currentFrontApplicationProvider: { "com.google.Chrome" }
+        )
+
+        service.execute(entry: entry, currentProjectId: defaultProject.id, triggerSource: .keyboardSubmit)
+        let persisted = try waitForRecentExecutionLog(logRepository)
+
+        XCTAssertEqual(persisted.result, Constants.ExecutionResult.clipboardOnly.rawValue)
+        XCTAssertEqual(persisted.failureReason, Constants.ExecutionFailureReason.accessibilityNotGranted.rawValue)
+        XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.keyboardSubmit.rawValue)
+        XCTAssertFalse(persisted.pasteAttempted)
+        XCTAssertEqual(pasteDispatcher.attemptCount, 0)
+    }
+
+    @MainActor
+    func testExecuteServiceLogsTargetRestoreMismatchBeforePaste() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let entry = Entry(projectId: defaultProject.id, title: "Prompt", content: "Copy me")
+        try entryRepository.create(entry)
+        let pasteDispatcher = FakePasteDispatcher(result: .dispatched)
+
+        let service = ExecuteService(
+            clipboardService: FakeClipboardWriter(success: true),
+            pasteService: pasteDispatcher,
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: FakePermissionProvider(isAccessibilityGranted: true),
+            targetApplicationProvider: { "com.google.Chrome" },
+            currentFrontApplicationProvider: { "com.apple.finder" }
+        )
+
+        service.execute(entry: entry, currentProjectId: defaultProject.id, triggerSource: .keyboardSubmit)
+        let persisted = try waitForRecentExecutionLog(logRepository, timeout: 2)
+
+        XCTAssertEqual(persisted.result, Constants.ExecutionResult.clipboardOnly.rawValue)
+        XCTAssertEqual(persisted.failureReason, Constants.ExecutionFailureReason.targetAppNotRestored.rawValue)
+        XCTAssertEqual(persisted.observedAppBundleId, "com.apple.finder")
+        XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.keyboardSubmit.rawValue)
+        XCTAssertNotNil(persisted.targetAppRestoreDurationMs)
+        XCTAssertEqual(pasteDispatcher.attemptCount, 0)
+    }
+
+    @MainActor
+    func testExecuteServiceLogsPasteEventCreationFallback() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let entry = Entry(projectId: defaultProject.id, title: "Prompt", content: "Copy me")
+        try entryRepository.create(entry)
+        let pasteDispatcher = FakePasteDispatcher(result: .eventCreationFailed)
+
+        let service = ExecuteService(
+            clipboardService: FakeClipboardWriter(success: true),
+            pasteService: pasteDispatcher,
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: FakePermissionProvider(isAccessibilityGranted: true),
+            targetApplicationProvider: { "com.google.Chrome" },
+            currentFrontApplicationProvider: { "com.google.Chrome" }
+        )
+
+        service.execute(entry: entry, currentProjectId: defaultProject.id, triggerSource: .pointerClick)
+        let persisted = try waitForRecentExecutionLog(logRepository)
+
+        XCTAssertEqual(persisted.result, Constants.ExecutionResult.clipboardOnly.rawValue)
+        XCTAssertEqual(persisted.failureReason, Constants.ExecutionFailureReason.pasteEventCreationFailed.rawValue)
+        XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.pointerClick.rawValue)
+        XCTAssertTrue(persisted.pasteAttempted)
+        XCTAssertFalse(persisted.pasteSuccess)
+        XCTAssertEqual(pasteDispatcher.attemptCount, 1)
+    }
+
+    @MainActor
+    func testExecuteServiceIgnoresConcurrentDuplicateExecutionRequests() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let entry = Entry(projectId: defaultProject.id, title: "Prompt", content: "Copy me")
+        try entryRepository.create(entry)
+        let pasteDispatcher = FakePasteDispatcher(result: .dispatched)
+
+        let service = ExecuteService(
+            clipboardService: FakeClipboardWriter(success: true),
+            pasteService: pasteDispatcher,
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: FakePermissionProvider(isAccessibilityGranted: true),
+            targetApplicationProvider: { "com.google.Chrome" },
+            currentFrontApplicationProvider: { "com.google.Chrome" }
+        )
+
+        service.execute(entry: entry, currentProjectId: defaultProject.id, triggerSource: .keyboardSubmit)
+        service.execute(entry: entry, currentProjectId: defaultProject.id, triggerSource: .pointerClick)
+
+        _ = try waitForRecentExecutionLog(logRepository)
+        let recentLogs = try logRepository.fetchRecent(limit: 10)
+        let persistedEntry = try XCTUnwrap(try entryRepository.fetch(id: entry.id))
+
+        XCTAssertEqual(recentLogs.count, 1)
+        XCTAssertEqual(recentLogs.first?.triggerSource, Constants.ExecutionTrigger.keyboardSubmit.rawValue)
+        XCTAssertEqual(pasteDispatcher.attemptCount, 1)
+        XCTAssertEqual(persistedEntry.useCount, 1)
     }
 
     @MainActor
@@ -652,7 +823,7 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: Constants.recoveryDirectory(for: databaseURL).path))
     }
 
-    func testStorageMaintenanceCreatesBackupAndPrunesOldCopies() throws {
+    func testStorageMaintenanceKeepsManualBackupsBeyondAutomaticRetention() throws {
         let databaseManager = try makeDatabaseManager()
         let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
         let maintenanceService = StorageMaintenanceService(
@@ -661,13 +832,13 @@ final class PromptPanelTests: XCTestCase {
             databaseURL: databaseManager.databaseURL
         )
 
-        _ = try maintenanceService.createManualBackup()
-        _ = try maintenanceService.createManualBackup()
-        _ = try maintenanceService.createManualBackup()
+        let backupTarget = Constants.automaticBackupRetentionCount + 2
+        for _ in 0..<backupTarget {
+            _ = try maintenanceService.createManualBackup()
+        }
 
         let snapshot = try maintenanceService.healthSnapshot()
-        XCTAssertGreaterThanOrEqual(snapshot.backupCount, 1)
-        XCTAssertLessThanOrEqual(snapshot.backupCount, Constants.automaticBackupRetentionCount)
+        XCTAssertEqual(snapshot.backupCount, backupTarget)
         XCTAssertNotNil(snapshot.latestBackupURL)
     }
 
@@ -778,6 +949,22 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(summary.failedCount, 1)
         XCTAssertNotNil(summary.latestExecutionAt)
         XCTAssertNotNil(summary.latestFailureAt)
+    }
+
+    private func waitForRecentExecutionLog(
+        _ logRepository: LogRepository,
+        timeout: TimeInterval = 1
+    ) throws -> ExecutionLog {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let log = try logRepository.fetchRecent(limit: 1).first {
+                return log
+            }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        throw NSError(domain: "PromptPanelTests", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "Timed out waiting for execution log"
+        ])
     }
 }
 
@@ -1590,6 +1777,43 @@ private final class FakeHotkeyRegistrar: HotkeyRegistrationHandling {
     func trigger(_ name: KeyboardShortcuts.Name) {
         handlers[name.rawValue]?()
     }
+}
+
+private final class FakeClipboardWriter: ClipboardWriting {
+    private let success: Bool
+
+    init(success: Bool) {
+        self.success = success
+    }
+
+    func writeText(_ text: String) -> Bool {
+        success
+    }
+}
+
+private final class FakePasteDispatcher: PasteDispatching {
+    private let result: PasteService.PasteDispatchResult
+    private(set) var attemptCount: Int = 0
+
+    init(result: PasteService.PasteDispatchResult) {
+        self.result = result
+    }
+
+    func attemptPaste() -> PasteService.PasteDispatchResult {
+        attemptCount += 1
+        return result
+    }
+}
+
+@MainActor
+private final class FakePermissionProvider: AccessibilityPermissionProviding {
+    private(set) var isAccessibilityGranted: Bool
+
+    init(isAccessibilityGranted: Bool) {
+        self.isAccessibilityGranted = isAccessibilityGranted
+    }
+
+    func refresh() {}
 }
 
 private func makeDatabaseManager() throws -> DatabaseManager {

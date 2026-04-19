@@ -57,6 +57,7 @@ enum Constants {
 
     enum SettingsKey {
         static let currentProjectId = "current_project_id"
+        static let panelPinned = "panel_pinned"
     }
 
     // MARK: - Entry Types
@@ -74,6 +75,11 @@ enum Constants {
         case success
         case clipboardOnly = "clipboard_only"
         case failed
+    }
+
+    enum ExecutionTrigger: String, Codable {
+        case keyboardSubmit = "keyboard_submit"
+        case pointerClick = "pointer_click"
     }
 
     // MARK: - Panel Performance

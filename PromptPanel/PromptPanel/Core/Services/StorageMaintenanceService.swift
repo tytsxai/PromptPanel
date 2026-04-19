@@ -48,7 +48,7 @@ final class StorageMaintenanceService: @unchecked Sendable {
         if try shouldCreateAutomaticBackup() {
             _ = try createBackup(reason: "launch")
         }
-        try pruneBackups(keeping: Constants.automaticBackupRetentionCount)
+        try pruneBackups(reason: "launch", keeping: Constants.automaticBackupRetentionCount)
         return try healthSnapshot()
     }
 
@@ -64,7 +64,7 @@ final class StorageMaintenanceService: @unchecked Sendable {
         try ensureStorageDirectories()
         try checkpointWal()
         let backupURL = try createBackup(reason: "manual")
-        try pruneBackups(keeping: Constants.automaticBackupRetentionCount)
+        try pruneBackups(reason: "launch", keeping: Constants.automaticBackupRetentionCount)
         return backupURL
     }
 

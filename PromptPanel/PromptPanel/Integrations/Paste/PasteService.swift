@@ -1,9 +1,13 @@
 import Cocoa
 import ApplicationServices
 
+protocol PasteDispatching {
+    func attemptPaste() -> PasteService.PasteDispatchResult
+}
+
 /// Manages auto-paste by simulating Cmd+V via CGEvent.
 /// Requires Accessibility permission.
-final class PasteService {
+final class PasteService: PasteDispatching {
 
     enum PasteDispatchResult {
         case dispatched
