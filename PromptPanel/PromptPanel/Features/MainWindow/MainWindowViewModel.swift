@@ -60,12 +60,12 @@ final class MainWindowViewModel: ObservableObject {
     @Published private(set) var executionHealthSummary: LogRepository.HealthSummary?
     @Published var selectedProjectId: String = MainWindowViewModel.allProjectsSelection {
         didSet {
-            refreshEntries()
+            scheduleEntriesRefresh(delayMs: 0)
         }
     }
     @Published var entrySearchText: String = "" {
         didSet {
-            refreshEntries()
+            scheduleEntriesRefresh(delayMs: Constants.mainWindowSearchDebounceMs)
         }
     }
     @Published var projectDraft: ProjectDraft?
@@ -86,6 +86,9 @@ final class MainWindowViewModel: ObservableObject {
     private let storageMaintenanceService: StorageMaintenanceService
     private let launchRecoveryReport: LaunchRecoveryReport?
     private var cancellables = Set<AnyCancellable>()
+    private let entriesLoadQueue = DispatchQueue(label: "PromptPanel.main-window.entries", qos: .userInitiated)
+    private var pendingEntriesRefreshWorkItem: DispatchWorkItem?
+    private var entriesRefreshGeneration: Int = 0
 
     init(
         appState: AppState,
@@ -111,6 +114,10 @@ final class MainWindowViewModel: ObservableObject {
         observeChanges()
     }
 
+    deinit {
+        pendingEntriesRefreshWorkItem?.cancel()
+    }
+
     var currentProjectId: String {
         appState.effectiveProjectId
     }
@@ -126,7 +133,7 @@ final class MainWindowViewModel: ObservableObject {
     func load() {
         refreshPermissionState()
         loadProjects()
-        loadEntries()
+        scheduleEntriesRefresh(delayMs: 0)
         refreshLogs()
         refreshOperationalStatus()
         if let launchRecoveryReport {
@@ -414,13 +421,13 @@ final class MainWindowViewModel: ObservableObject {
         NotificationCenter.default.publisher(for: .projectsDidChange)
             .sink { [weak self] _ in
                 self?.loadProjects()
-                self?.loadEntries()
+                self?.scheduleEntriesRefresh(delayMs: 0)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .entriesDidChange)
             .sink { [weak self] _ in
-                self?.loadEntries()
+                self?.scheduleEntriesRefresh(delayMs: 0)
                 self?.refreshLogs()
             }
             .store(in: &cancellables)
@@ -454,33 +461,75 @@ final class MainWindowViewModel: ObservableObject {
     }
 
     private func loadEntries() {
-        refreshEntries()
+        scheduleEntriesRefresh(delayMs: 0)
     }
 
-    private func refreshEntries() {
-        do {
-            if selectedProjectId == Self.allProjectsSelection {
-                if entrySearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    entries = try entryRepository.fetchAll()
-                } else {
-                    entries = try entryRepository.search(
-                        query: entrySearchText,
-                        projectIds: projects.map(\.id)
-                    )
-                }
-            } else if entrySearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                entries = try entryRepository.fetchByProject(selectedProjectId)
-            } else {
-                entries = try entryRepository.search(
-                    query: entrySearchText,
-                    projectIds: [selectedProjectId]
-                )
+    private func scheduleEntriesRefresh(delayMs: Int) {
+        pendingEntriesRefreshWorkItem?.cancel()
+
+        let selectedProjectId = self.selectedProjectId
+        let entrySearchText = self.entrySearchText
+        let projectIds = projects.map(\.id)
+        let allProjectsSelection = Self.allProjectsSelection
+        let entryRepository = self.entryRepository
+
+        entriesRefreshGeneration += 1
+        let generation = entriesRefreshGeneration
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
             }
-        } catch {
-            PPLogger.entry.error("Failed to load entries: \(error.localizedDescription)")
-            entries = []
-            bannerMessage = "加载词条失败。"
+
+            self.entriesLoadQueue.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                let result: Result<[Entry], Error>
+                do {
+                    let entries: [Entry]
+                    if selectedProjectId == allProjectsSelection {
+                        if entrySearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            entries = try entryRepository.fetchAll()
+                        } else {
+                            entries = try entryRepository.search(
+                                query: entrySearchText,
+                                projectIds: projectIds
+                            )
+                        }
+                    } else if entrySearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        entries = try entryRepository.fetchByProject(selectedProjectId)
+                    } else {
+                        entries = try entryRepository.search(
+                            query: entrySearchText,
+                            projectIds: [selectedProjectId]
+                        )
+                    }
+                    result = .success(entries)
+                } catch {
+                    result = .failure(error)
+                }
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.entriesRefreshGeneration == generation else {
+                        return
+                    }
+
+                    switch result {
+                    case .success(let entries):
+                        self.entries = entries
+                    case .failure(let error):
+                        PPLogger.entry.error("Failed to load entries: \(error.localizedDescription)")
+                        self.entries = []
+                        self.bannerMessage = "加载词条失败。"
+                    }
+                }
+            }
         }
+
+        pendingEntriesRefreshWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(max(delayMs, 0)), execute: workItem)
     }
 
     private func persistCurrentProject(_ projectId: String?) {

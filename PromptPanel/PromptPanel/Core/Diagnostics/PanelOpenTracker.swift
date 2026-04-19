@@ -3,6 +3,51 @@ import Foundation
 struct PanelFocusResult {
     let token: Int
     let succeeded: Bool
+    let attempt: Int
+    let appIsActive: Bool
+    let windowIsVisible: Bool
+    let windowIsKey: Bool
+    let windowIsMain: Bool
+    let firstResponderMatches: Bool
+    let hasEditor: Bool
+
+    init(
+        token: Int,
+        succeeded: Bool,
+        attempt: Int = 0,
+        appIsActive: Bool = false,
+        windowIsVisible: Bool = false,
+        windowIsKey: Bool = false,
+        windowIsMain: Bool = false,
+        firstResponderMatches: Bool = false,
+        hasEditor: Bool = false
+    ) {
+        self.token = token
+        self.succeeded = succeeded
+        self.attempt = attempt
+        self.appIsActive = appIsActive
+        self.windowIsVisible = windowIsVisible
+        self.windowIsKey = windowIsKey
+        self.windowIsMain = windowIsMain
+        self.firstResponderMatches = firstResponderMatches
+        self.hasEditor = hasEditor
+    }
+}
+
+struct PanelActivationSnapshot {
+    let appIsActive: Bool
+    let panelIsVisible: Bool
+    let panelIsKey: Bool
+
+    var isStable: Bool {
+        appIsActive && panelIsVisible && panelIsKey
+    }
+
+    init(appIsActive: Bool, panelIsVisible: Bool, panelIsKey: Bool) {
+        self.appIsActive = appIsActive
+        self.panelIsVisible = panelIsVisible
+        self.panelIsKey = panelIsKey
+    }
 }
 
 struct PanelOpenTrace {
@@ -64,6 +109,23 @@ final class PanelOpenTracker {
         )
     }
 
+    func recordPanelActivationCheck(attempt: Int, snapshot: PanelActivationSnapshot, final: Bool) {
+        guard let trace = currentTrace else {
+            return
+        }
+
+        let status = snapshot.isStable ? "stable" : (final ? "failed" : "retrying")
+        if snapshot.isStable {
+            PPLogger.panel.info(
+                "panel_activation_check trace_id=\(trace.id) attempt=\(attempt) status=\(status) app_active=\(snapshot.appIsActive) panel_visible=\(snapshot.panelIsVisible) panel_key=\(snapshot.panelIsKey)"
+            )
+        } else {
+            PPLogger.panel.warning(
+                "panel_activation_check trace_id=\(trace.id) attempt=\(attempt) status=\(status) app_active=\(snapshot.appIsActive) panel_visible=\(snapshot.panelIsVisible) panel_key=\(snapshot.panelIsKey)"
+            )
+        }
+    }
+
     func markSearchFieldFocused(_ result: PanelFocusResult) {
         guard var trace = currentTrace else {
             return
@@ -77,7 +139,7 @@ final class PanelOpenTracker {
 
             let hotkeyToFocusMs = trace.hotkeyToSearchFieldFocusedMs ?? -1
             PPLogger.panel.info(
-                "search_field_focused_at=\(now.ISO8601Format()) trace_id=\(trace.id) focus_token=\(result.token) hotkey_to_focus_ms=\(hotkeyToFocusMs)"
+                "search_field_focused_at=\(now.ISO8601Format()) trace_id=\(trace.id) focus_token=\(result.token) attempt=\(result.attempt) hotkey_to_focus_ms=\(hotkeyToFocusMs) app_active=\(result.appIsActive) window_visible=\(result.windowIsVisible) window_key=\(result.windowIsKey) window_main=\(result.windowIsMain) responder_match=\(result.firstResponderMatches) has_editor=\(result.hasEditor)"
             )
 
             if hotkeyToFocusMs > Constants.panelOpenLatencyTargetMs {
@@ -87,7 +149,7 @@ final class PanelOpenTracker {
             }
         } else {
             PPLogger.panel.warning(
-                "search_field_focus_failed trace_id=\(trace.id) focus_token=\(result.token)"
+                "search_field_focus_failed trace_id=\(trace.id) focus_token=\(result.token) attempt=\(result.attempt) app_active=\(result.appIsActive) window_visible=\(result.windowIsVisible) window_key=\(result.windowIsKey) window_main=\(result.windowIsMain) responder_match=\(result.firstResponderMatches) has_editor=\(result.hasEditor)"
             )
         }
     }

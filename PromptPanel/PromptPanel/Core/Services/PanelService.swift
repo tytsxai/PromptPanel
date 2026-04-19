@@ -4,6 +4,11 @@ import Cocoa
 /// show, hide, toggle, focus control, Esc/click-outside behavior.
 @MainActor
 final class PanelService {
+    enum ActivationAction: Equatable {
+        case stable
+        case retry(nextAttempt: Int)
+        case failed
+    }
 
     private var panel: NSPanel?
     private var panelDelegate: PanelDelegate?
@@ -11,10 +16,12 @@ final class PanelService {
     private let appState: AppState
     private let panelVisibilityCoordinator = PanelVisibilityCoordinator()
     private let panelOpenTracker: PanelOpenTracker?
+    private let panelContentInsets = NSEdgeInsets(top: 32, left: 20, bottom: 16, right: 20)
 
     /// Callback to create the panel content view.
     var contentViewProvider: (() -> NSView)?
     var onWillShow: (() -> Void)?
+    var onDidStabilizeActivation: (() -> Void)?
 
     init(appState: AppState, panelOpenTracker: PanelOpenTracker? = nil) {
         self.appState = appState
@@ -63,13 +70,13 @@ final class PanelService {
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
-        NSApp.activate(ignoringOtherApps: true)
-        panel.makeKeyAndOrderFront(nil)
-        panel.orderFrontRegardless()
-
         appState.isPanelVisible = true
         panelVisibilityCoordinator.finishShow()
         panelOpenTracker?.markPanelShown()
+        applyActivationPolicyForCurrentVisibility()
+        activatePromptPanelApplication()
+        bringPanelToFront(panel)
+        stabilizePanelActivation(panel)
         PPLogger.panel.info("Panel shown")
     }
 
@@ -86,6 +93,7 @@ final class PanelService {
             panelOpenTracker?.cancelCurrentTrace(reason: "panel_hidden_before_focus")
         }
         reactivateTargetApplication()
+        applyActivationPolicyForCurrentVisibility()
         PPLogger.panel.info("Panel hidden")
     }
 
@@ -95,8 +103,8 @@ final class PanelService {
 
     /// Create the NSPanel with proper configuration.
     private func createPanel() {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 460),
+        let panel = QuickPanelWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 508),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -107,16 +115,20 @@ final class PanelService {
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = false
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .utilityWindow
-        panel.collectionBehavior = [.transient, .ignoresCycle]
+        panel.collectionBehavior = [.transient, .ignoresCycle, .moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
+        panel.hasShadow = true
+
+        configureWindowButtons(for: panel)
 
         // Set content view
         if let contentView = contentViewProvider?() {
-            panel.contentView = contentView
+            panel.contentView = makePanelBackgroundView(contentView: contentView)
         }
 
         // Handle Esc key and click-outside
@@ -130,12 +142,141 @@ final class PanelService {
         PPLogger.panel.info("Panel created")
     }
 
+    private func configureWindowButtons(for panel: NSPanel) {
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        panel.standardWindowButton(.closeButton)?.isEnabled = true
+    }
+
+    private func makePanelBackgroundView(contentView: NSView) -> NSVisualEffectView {
+        let backgroundView = NSVisualEffectView()
+        backgroundView.material = .hudWindow
+        backgroundView.blendingMode = .behindWindow
+        backgroundView.state = .followsWindowActiveState
+        backgroundView.wantsLayer = true
+        backgroundView.layer?.cornerRadius = 20
+        backgroundView.layer?.masksToBounds = true
+
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        backgroundView.addSubview(contentView)
+
+        NSLayoutConstraint.activate([
+            contentView.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor, constant: panelContentInsets.left),
+            contentView.trailingAnchor.constraint(equalTo: backgroundView.trailingAnchor, constant: -panelContentInsets.right),
+            contentView.topAnchor.constraint(equalTo: backgroundView.topAnchor, constant: panelContentInsets.top),
+            contentView.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -panelContentInsets.bottom)
+        ])
+
+        return backgroundView
+    }
+
     private func reactivateTargetApplication() {
         guard let targetApplication else {
             return
         }
-        _ = targetApplication.activate(options: [])
+        let currentFrontmostBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        if currentFrontmostBundleId == Bundle.main.bundleIdentifier {
+            _ = targetApplication.activate(options: [])
+        } else {
+            PPLogger.panel.info(
+                "Skipped target app reactivation because frontmost app already changed to \(currentFrontmostBundleId ?? "unknown")"
+            )
+        }
         self.targetApplication = nil
+    }
+
+    private func stabilizePanelActivation(_ panel: NSPanel, attempt: Int = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(attempt == 0 ? 0 : Constants.panelActivationRetryDelayMs)) { [weak self, weak panel] in
+            guard let self, let panel else {
+                return
+            }
+            guard self.panel === panel, self.appState.isPanelVisible else {
+                return
+            }
+
+            let snapshot = PanelActivationSnapshot(
+                appIsActive: NSApp.isActive,
+                panelIsVisible: panel.isVisible,
+                panelIsKey: panel.isKeyWindow
+            )
+            let action = Self.activationAction(
+                snapshot: snapshot,
+                attempt: attempt,
+                maxAttempts: Constants.panelActivationMaxAttempts
+            )
+
+            switch action {
+            case .stable:
+                self.panelOpenTracker?.recordPanelActivationCheck(attempt: attempt, snapshot: snapshot, final: true)
+                self.onDidStabilizeActivation?()
+            case .retry(let nextAttempt):
+                self.panelOpenTracker?.recordPanelActivationCheck(attempt: attempt, snapshot: snapshot, final: false)
+                self.activatePromptPanelApplication()
+                self.bringPanelToFront(panel)
+                self.stabilizePanelActivation(panel, attempt: nextAttempt)
+            case .failed:
+                self.panelOpenTracker?.recordPanelActivationCheck(attempt: attempt, snapshot: snapshot, final: true)
+                PPLogger.panel.error(
+                    "panel_activation_failed attempt=\(attempt) app_active=\(snapshot.appIsActive) panel_visible=\(snapshot.panelIsVisible) panel_key=\(snapshot.panelIsKey)"
+                )
+            }
+        }
+    }
+
+    private func activatePromptPanelApplication() {
+        NSApp.activate(ignoringOtherApps: true)
+        _ = NSRunningApplication.current.activate(options: [])
+    }
+
+    private func bringPanelToFront(_ panel: NSPanel) {
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeMain()
+        panel.orderFrontRegardless()
+    }
+
+    static func activationAction(
+        snapshot: PanelActivationSnapshot,
+        attempt: Int,
+        maxAttempts: Int
+    ) -> ActivationAction {
+        if snapshot.isStable {
+            return .stable
+        }
+        if attempt < maxAttempts {
+            return .retry(nextAttempt: attempt + 1)
+        }
+        return .failed
+    }
+
+    static func desiredActivationPolicy(
+        isPanelVisible: Bool,
+        isMainWindowVisible: Bool
+    ) -> NSApplication.ActivationPolicy {
+        (isPanelVisible || isMainWindowVisible) ? .regular : .accessory
+    }
+
+    private func applyActivationPolicyForCurrentVisibility() {
+        applyActivationPolicy(
+            Self.desiredActivationPolicy(
+                isPanelVisible: appState.isPanelVisible,
+                isMainWindowVisible: appState.isMainWindowVisible
+            )
+        )
+    }
+
+    private func applyActivationPolicy(_ policy: NSApplication.ActivationPolicy) {
+        guard NSApp.activationPolicy() != policy else {
+            return
+        }
+
+        guard NSApp.setActivationPolicy(policy) else {
+            PPLogger.app.error("Failed to switch activation policy to \(String(describing: policy))")
+            return
+        }
+
+        PPLogger.app.info("Switched activation policy to \(String(describing: policy))")
     }
 }
 
@@ -144,17 +285,47 @@ final class PanelService {
 private class PanelDelegate: NSObject, NSWindowDelegate {
 
     let onClose: () -> Void
+    private let resignCloseDelayMs = 80
 
     init(onClose: @escaping () -> Void) {
         self.onClose = onClose
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        // Click outside panel → close
-        onClose()
+        guard let window = notification.object as? NSWindow else {
+            return
+        }
+
+        // Delay the close check so transient focus churn during presentation does not
+        // immediately dismiss the panel, while real click-outside transitions still do.
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(resignCloseDelayMs)) { [weak self, weak window] in
+            guard let self, let window else {
+                return
+            }
+            guard window.isVisible else {
+                return
+            }
+            guard window.isKeyWindow == false else {
+                return
+            }
+            guard NSApp.isActive == false else {
+                return
+            }
+            self.onClose()
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
         onClose()
+    }
+}
+
+final class QuickPanelWindow: NSPanel {
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
     }
 }

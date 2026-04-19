@@ -45,6 +45,8 @@ struct KeyAwareSearchField: NSViewRepresentable {
             nsView.stringValue = text
         }
 
+        context.coordinator.focusResolveHandler = onFocusResolved
+
         if context.coordinator.lastFocusToken != focusToken {
             context.coordinator.lastFocusToken = focusToken
             context.coordinator.scheduleFocus(
@@ -62,10 +64,18 @@ struct KeyAwareSearchField: NSViewRepresentable {
     final class Coordinator: NSObject, NSSearchFieldDelegate {
         @Binding var text: String
         var lastFocusToken: Int = -1
-        private var reportedFocusToken: Int = -1
+        var focusResolveHandler: ((PanelFocusResult) -> Void)?
+        private var reportedSuccessfulFocusToken: Int = -1
 
         init(text: Binding<String>) {
             self._text = text
+        }
+
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            guard let field = notification.object as? PromptSearchField else {
+                return
+            }
+            reportSuccessfulFocusIfNeeded(field: field, attempt: Constants.panelFocusMaxAttempts)
         }
 
         func controlTextDidChange(_ notification: Notification) {
@@ -80,11 +90,13 @@ struct KeyAwareSearchField: NSViewRepresentable {
             focusToken: Int,
             onFocusResolved: @escaping (PanelFocusResult) -> Void
         ) {
-            reportedFocusToken = -1
+            focusResolveHandler = onFocusResolved
+            reportedSuccessfulFocusToken = -1
             attemptFocus(
                 on: field,
                 focusToken: focusToken,
-                remainingAttempts: 2,
+                remainingAttempts: Constants.panelFocusMaxAttempts,
+                attempt: 0,
                 onFocusResolved: onFocusResolved
             )
         }
@@ -93,9 +105,11 @@ struct KeyAwareSearchField: NSViewRepresentable {
             on field: PromptSearchField,
             focusToken: Int,
             remainingAttempts: Int,
+            attempt: Int,
             onFocusResolved: @escaping (PanelFocusResult) -> Void
         ) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + (remainingAttempts == 2 ? 0 : 0.02)) { [weak self, weak field] in
+            let delayMs = attempt == 0 ? 0 : Constants.panelFocusRetryDelayMs
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self, weak field] in
                 guard let self, let field else {
                     return
                 }
@@ -103,35 +117,71 @@ struct KeyAwareSearchField: NSViewRepresentable {
                     return
                 }
 
+                self.activateWindowIfNeeded(for: field)
                 _ = field.window?.makeFirstResponder(field)
-                let focusSucceeded = field.currentEditor() != nil || field.window?.firstResponder === field
+                let focusResult = self.makeFocusResult(field: field, token: focusToken, attempt: attempt)
 
-                if focusSucceeded {
+                if focusResult.succeeded {
                     field.currentEditor()?.selectedRange = NSRange(location: field.stringValue.count, length: 0)
-                    self.reportFocusIfNeeded(token: focusToken, succeeded: true, onFocusResolved: onFocusResolved)
+                    self.reportSuccessfulFocusIfNeeded(result: focusResult)
                 } else if remainingAttempts > 0 {
                     self.attemptFocus(
                         on: field,
                         focusToken: focusToken,
                         remainingAttempts: remainingAttempts - 1,
+                        attempt: attempt + 1,
                         onFocusResolved: onFocusResolved
                     )
                 } else {
-                    self.reportFocusIfNeeded(token: focusToken, succeeded: false, onFocusResolved: onFocusResolved)
+                    onFocusResolved(focusResult)
                 }
             }
         }
 
-        private func reportFocusIfNeeded(
-            token: Int,
-            succeeded: Bool,
-            onFocusResolved: (PanelFocusResult) -> Void
-        ) {
-            guard reportedFocusToken != token else {
+        private func makeFocusResult(field: PromptSearchField, token: Int, attempt: Int) -> PanelFocusResult {
+            let window = field.window
+            let hasEditor = field.currentEditor() != nil
+            let firstResponderMatches = window?.firstResponder === field
+            return PanelFocusResult(
+                token: token,
+                succeeded: hasEditor || firstResponderMatches,
+                attempt: attempt,
+                appIsActive: NSApp.isActive,
+                windowIsVisible: window?.isVisible ?? false,
+                windowIsKey: window?.isKeyWindow ?? false,
+                windowIsMain: window?.isMainWindow ?? false,
+                firstResponderMatches: firstResponderMatches,
+                hasEditor: hasEditor
+            )
+        }
+
+        private func activateWindowIfNeeded(for field: PromptSearchField) {
+            _ = NSRunningApplication.current.activate(options: [])
+            NSApp.activate(ignoringOtherApps: true)
+            field.window?.makeKeyAndOrderFront(nil)
+            field.window?.makeMain()
+        }
+
+        private func reportSuccessfulFocusIfNeeded(field: PromptSearchField, attempt: Int) {
+            guard lastFocusToken >= 0 else {
                 return
             }
-            reportedFocusToken = token
-            onFocusResolved(PanelFocusResult(token: token, succeeded: succeeded))
+            let result = makeFocusResult(field: field, token: lastFocusToken, attempt: attempt)
+            guard result.succeeded else {
+                return
+            }
+            reportSuccessfulFocusIfNeeded(result: result)
+        }
+
+        private func reportSuccessfulFocusIfNeeded(result: PanelFocusResult) {
+            guard reportedSuccessfulFocusToken != result.token else {
+                return
+            }
+            guard let focusResolveHandler else {
+                return
+            }
+            reportedSuccessfulFocusToken = result.token
+            focusResolveHandler(result)
         }
     }
 }

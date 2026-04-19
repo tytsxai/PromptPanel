@@ -75,28 +75,47 @@ final class ExecuteService {
         // Step 2: Close panel to return focus to original app
         onClosePanel?()
 
-        // Give the system a moment to restore focus
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            guard let self = self else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let observedAppBundleId = await self.waitForTargetApplicationRestore(expectedBundleId: frontAppBundleId)
             self.performPaste(
                 entry: entry,
                 projectId: currentProjectId,
                 frontAppBundleId: frontAppBundleId,
+                observedAppBundleId: observedAppBundleId,
                 startTime: startTime
             )
         }
+    }
+
+    private func waitForTargetApplicationRestore(expectedBundleId: String?) async -> String? {
+        guard let expectedBundleId else {
+            return currentFrontApplicationProvider()
+        }
+
+        var observedBundleId = currentFrontApplicationProvider()
+        let timeoutNs = UInt64(Constants.targetAppRestoreTimeoutMs) * 1_000_000
+        let pollNs = UInt64(Constants.targetAppRestorePollIntervalMs) * 1_000_000
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNs
+
+        while observedBundleId != expectedBundleId && DispatchTime.now().uptimeNanoseconds < deadline {
+            try? await Task.sleep(nanoseconds: pollNs)
+            observedBundleId = currentFrontApplicationProvider()
+        }
+
+        return observedBundleId
     }
 
     private func performPaste(
         entry: Entry,
         projectId: String,
         frontAppBundleId: String?,
+        observedAppBundleId: String?,
         startTime: UInt64
     ) {
         // Step 3: Check accessibility permission
         permissionService.refresh()
         let hasPermission = permissionService.isAccessibilityGranted
-        let observedAppBundleId = currentFrontApplicationProvider()
 
         guard hasPermission else {
             // No permission — clipboard-only mode
@@ -118,8 +137,10 @@ final class ExecuteService {
             return
         }
 
-        if let frontAppBundleId, let observedAppBundleId, frontAppBundleId != observedAppBundleId {
-            PPLogger.execute.warning("Target app not restored before paste: expected=\(frontAppBundleId), observed=\(observedAppBundleId)")
+        if Self.isTargetApplicationRestoreMismatch(expectedBundleId: frontAppBundleId, observedBundleId: observedAppBundleId) {
+            PPLogger.execute.warning(
+                "Target app not restored before paste: expected=\(frontAppBundleId ?? "unknown"), observed=\(observedAppBundleId ?? "unknown")"
+            )
             logExecution(
                 entry: entry,
                 projectId: projectId,
@@ -191,6 +212,13 @@ final class ExecuteService {
         }
     }
 
+    static func isTargetApplicationRestoreMismatch(expectedBundleId: String?, observedBundleId: String?) -> Bool {
+        guard let expectedBundleId, let observedBundleId else {
+            return false
+        }
+        return expectedBundleId != observedBundleId
+    }
+
     private func recordUsage(entry: Entry) {
         do {
             try entryRepository.recordExecution(id: entry.id)
@@ -227,9 +255,26 @@ final class ExecuteService {
         )
         do {
             try logRepository.record(log)
+            if let totalDurationMs {
+                warnIfExecutionSlow(durationMs: totalDurationMs, result: result, failureReason: failureReason)
+            }
         } catch {
             PPLogger.execute.error("Failed to write execution log: \(error.localizedDescription)")
         }
+    }
+
+    private func warnIfExecutionSlow(
+        durationMs: Int,
+        result: Constants.ExecutionResult,
+        failureReason: Constants.ExecutionFailureReason?
+    ) {
+        guard durationMs > Constants.executionLatencyTargetMs else {
+            return
+        }
+
+        PPLogger.execute.warning(
+            "execution_latency_exceeded duration_ms=\(durationMs) target_ms=\(Constants.executionLatencyTargetMs) result=\(result.rawValue) failure_reason=\(failureReason?.rawValue ?? "none")"
+        )
     }
 
     private func elapsedMilliseconds(since startTime: UInt64) -> Int {

@@ -80,6 +80,16 @@ enum Constants {
 
     static let panelOpenLatencyTargetMs = 300
     static let panelExecutionUnlockDelayMs = 50
+    static let panelActivationRetryDelayMs = 60
+    static let panelActivationMaxAttempts = 3
+    static let panelFocusRetryDelayMs = 60
+    static let panelFocusMaxAttempts = 10
+    static let panelSearchDebounceMs = 80
+    static let mainWindowSearchDebounceMs = 120
+    static let searchLatencyTargetMs = 80
+    static let executionLatencyTargetMs = 250
+    static let targetAppRestorePollIntervalMs = 40
+    static let targetAppRestoreTimeoutMs = 700
 
     enum ExecutionFailureReason: String, Codable {
         case clipboardWriteFailed = "clipboard_write_failed"

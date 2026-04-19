@@ -10,7 +10,7 @@ final class QuickPanelViewModel: ObservableObject {
 
     @Published var query: String = "" {
         didSet {
-            refreshEntries()
+            scheduleEntriesRefresh(delayMs: Constants.panelSearchDebounceMs)
         }
     }
     @Published private(set) var entries: [Entry] = []
@@ -30,6 +30,9 @@ final class QuickPanelViewModel: ObservableObject {
     private let panelOpenTracker: PanelOpenTracker?
     private let onClosePanel: () -> Void
     private var cancellables = Set<AnyCancellable>()
+    private let searchQueue = DispatchQueue(label: "PromptPanel.quick-panel.search", qos: .userInitiated)
+    private var pendingSearchWorkItem: DispatchWorkItem?
+    private var searchGeneration: Int = 0
 
     init(
         appState: AppState,
@@ -54,6 +57,10 @@ final class QuickPanelViewModel: ObservableObject {
         observeChanges()
     }
 
+    deinit {
+        pendingSearchWorkItem?.cancel()
+    }
+
     var selectedEntry: Entry? {
         guard entries.indices.contains(selectedIndex) else {
             return entries.first
@@ -70,7 +77,7 @@ final class QuickPanelViewModel: ObservableObject {
         isExecutionReady = false
         focusToken += 1
         loadProjects()
-        refreshEntries()
+        scheduleEntriesRefresh(delayMs: 0)
     }
 
     func handleSearchFieldFocus(_ result: PanelFocusResult) {
@@ -78,7 +85,16 @@ final class QuickPanelViewModel: ObservableObject {
             return
         }
         panelOpenTracker?.markSearchFieldFocused(result)
+        guard result.succeeded else {
+            isExecutionReady = false
+            return
+        }
         scheduleExecutionUnlock(for: result.token)
+    }
+
+    func retryFocusAfterActivationStabilized() {
+        isExecutionReady = false
+        focusToken += 1
     }
 
     func closePanel() {
@@ -105,8 +121,8 @@ final class QuickPanelViewModel: ObservableObject {
         selectedIndex = index
     }
 
-    func executeSelection() {
-        guard isExecutionReady else {
+    func executeSelection(force: Bool = false) {
+        guard force || isExecutionReady else {
             PPLogger.panel.warning("Ignored executeSelection because panel is not ready for execution yet")
             return
         }
@@ -127,7 +143,7 @@ final class QuickPanelViewModel: ObservableObject {
             appState.currentProjectId = id
             currentProjectId = id
             NotificationCenter.default.post(name: .currentProjectDidChange, object: nil)
-            refreshEntries()
+            scheduleEntriesRefresh(delayMs: 0)
         } catch {
             PPLogger.project.error("Failed to switch current project: \(error.localizedDescription)")
             statusMessage = "切换项目失败，请重试。"
@@ -139,13 +155,13 @@ final class QuickPanelViewModel: ObservableObject {
             .merge(with: NotificationCenter.default.publisher(for: .currentProjectDidChange))
             .sink { [weak self] _ in
                 self?.loadProjects()
-                self?.refreshEntries()
+                self?.scheduleEntriesRefresh(delayMs: 0)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .entriesDidChange)
             .sink { [weak self] _ in
-                self?.refreshEntries()
+                self?.scheduleEntriesRefresh(delayMs: 0)
             }
             .store(in: &cancellables)
     }
@@ -163,28 +179,72 @@ final class QuickPanelViewModel: ObservableObject {
         }
     }
 
-    private func refreshEntries() {
+    private func scheduleEntriesRefresh(delayMs: Int) {
+        pendingSearchWorkItem?.cancel()
+        entries = []
+        selectedIndex = 0
+
         guard !appState.effectiveProjectId.isEmpty || !currentProjectId.isEmpty else {
-            entries = []
-            selectedIndex = 0
             return
         }
 
-        appState.currentProjectId = currentProjectId.isEmpty ? appState.effectiveProjectId : currentProjectId
+        let effectiveCurrentProjectId = currentProjectId.isEmpty ? appState.effectiveProjectId : currentProjectId
+        let defaultProjectId = appState.defaultProjectId
+        let query = self.query
+        let searchService = self.searchService
 
-        do {
-            entries = try searchService.search(query: query)
-            if entries.isEmpty {
-                selectedIndex = 0
-            } else {
-                selectedIndex = min(selectedIndex, entries.count - 1)
+        appState.currentProjectId = effectiveCurrentProjectId
+        searchGeneration += 1
+        let generation = searchGeneration
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else {
+                return
             }
-        } catch {
-            PPLogger.search.error("Panel search failed: \(error.localizedDescription)")
-            entries = []
-            selectedIndex = 0
-            statusMessage = "搜索失败，请稍后重试。"
+
+            self.searchQueue.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                let result: Result<[Entry], Error>
+                do {
+                    result = .success(
+                        try searchService.search(
+                            query: query,
+                            currentProjectId: effectiveCurrentProjectId,
+                            defaultProjectId: defaultProjectId
+                        )
+                    )
+                } catch {
+                    result = .failure(error)
+                }
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.searchGeneration == generation else {
+                        return
+                    }
+
+                    switch result {
+                    case .success(let entries):
+                        self.entries = entries
+                        if entries.isEmpty {
+                            self.selectedIndex = 0
+                        } else {
+                            self.selectedIndex = min(self.selectedIndex, entries.count - 1)
+                        }
+                    case .failure(let error):
+                        PPLogger.search.error("Panel search failed: \(error.localizedDescription)")
+                        self.entries = []
+                        self.selectedIndex = 0
+                        self.statusMessage = "搜索失败，请稍后重试。"
+                    }
+                }
+            }
         }
+
+        pendingSearchWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(max(delayMs, 0)), execute: workItem)
     }
 
     private func scheduleExecutionUnlock(for token: Int) {

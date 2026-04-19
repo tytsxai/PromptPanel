@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// Data access layer for app settings (key-value store).
-final class SettingsRepository {
+final class SettingsRepository: @unchecked Sendable {
 
     private let dbQueue: DatabaseQueue
 

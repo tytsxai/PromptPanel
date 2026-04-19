@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// Data access layer for entries.
-final class EntryRepository {
+final class EntryRepository: @unchecked Sendable {
 
     private let dbQueue: DatabaseQueue
 

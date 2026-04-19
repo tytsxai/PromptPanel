@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// Data access layer for execution logs.
-final class LogRepository {
+final class LogRepository: @unchecked Sendable {
     struct HealthSummary {
         let totalCount: Int
         let successCount: Int

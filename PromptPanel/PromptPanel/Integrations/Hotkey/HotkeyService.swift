@@ -2,6 +2,11 @@ import Foundation
 import KeyboardShortcuts
 
 private let preferredTogglePanelShortcut = KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift])
+private let deprecatedTogglePanelShortcuts = [
+    KeyboardShortcuts.Shortcut(.space, modifiers: [.option]),
+    KeyboardShortcuts.Shortcut(.space, modifiers: [.option, .shift]),
+]
+private let togglePanelShortcutMigrationFlagKey = "toggle_panel_shortcut_migrated_to_option_shift_p"
 
 // MARK: - Hotkey Name Registration
 
@@ -31,19 +36,23 @@ final class HotkeyService {
     private let onTogglePanel: () -> Void
     private let registrar: HotkeyRegistrationHandling
     private let panelOpenTracker: PanelOpenTracker?
+    private let userDefaults: UserDefaults
 
     init(
         onTogglePanel: @escaping () -> Void,
         registrar: HotkeyRegistrationHandling = KeyboardShortcutsRegistrar(),
-        panelOpenTracker: PanelOpenTracker? = nil
+        panelOpenTracker: PanelOpenTracker? = nil,
+        userDefaults: UserDefaults = .standard
     ) {
         self.onTogglePanel = onTogglePanel
         self.registrar = registrar
         self.panelOpenTracker = panelOpenTracker
+        self.userDefaults = userDefaults
     }
 
     /// Start listening for the global hotkey.
     func start() {
+        migrateLegacyShortcutIfNeeded()
         registrar.onKeyUp(for: .togglePanel) { [weak self] in
             self?.handleTogglePanel()
         }
@@ -60,5 +69,21 @@ final class HotkeyService {
         panelOpenTracker?.markHotkeyTriggered()
         PPLogger.hotkey.info("Toggle panel hotkey triggered")
         onTogglePanel()
+    }
+
+    private func migrateLegacyShortcutIfNeeded() {
+        guard !userDefaults.bool(forKey: togglePanelShortcutMigrationFlagKey) else {
+            return
+        }
+        guard let currentShortcut = KeyboardShortcuts.Name.togglePanel.shortcut else {
+            return
+        }
+        guard deprecatedTogglePanelShortcuts.contains(currentShortcut) else {
+            return
+        }
+
+        KeyboardShortcuts.setShortcut(preferredTogglePanelShortcut, for: .togglePanel)
+        userDefaults.set(true, forKey: togglePanelShortcutMigrationFlagKey)
+        PPLogger.hotkey.notice("Migrated legacy toggle-panel hotkey to preferred default")
     }
 }

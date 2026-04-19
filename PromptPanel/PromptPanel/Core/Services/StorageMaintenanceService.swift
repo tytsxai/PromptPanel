@@ -22,7 +22,7 @@ struct StorageHealthSnapshot {
     let latestBackupURL: URL?
 }
 
-final class StorageMaintenanceService {
+final class StorageMaintenanceService: @unchecked Sendable {
     private let dbQueue: DatabaseQueue
     private let logRepository: LogRepository
     private let databaseURL: URL
@@ -131,8 +131,8 @@ final class StorageMaintenanceService {
         }
     }
 
-    private func pruneBackups(keeping count: Int) throws {
-        let backups = try backupFiles()
+    private func pruneBackups(reason: String? = nil, keeping count: Int) throws {
+        let backups = try backupFiles(reason: reason)
         guard backups.count > count else {
             return
         }
@@ -142,7 +142,7 @@ final class StorageMaintenanceService {
         }
     }
 
-    private func backupFiles() throws -> [URL] {
+    private func backupFiles(reason: String? = nil) throws -> [URL] {
         let directoryURL = Constants.backupDirectory(for: databaseURL)
         guard let enumerator = fileManager.enumerator(
             at: directoryURL,
@@ -152,7 +152,15 @@ final class StorageMaintenanceService {
             return []
         }
 
-        let urls = enumerator.compactMap { $0 as? URL }.filter { $0.pathExtension == "sqlite" }
+        let urls = enumerator.compactMap { $0 as? URL }.filter { url in
+            guard url.pathExtension == "sqlite" else {
+                return false
+            }
+            guard let reason else {
+                return true
+            }
+            return url.lastPathComponent.contains("-\(reason)-")
+        }
         return try urls.sorted { lhs, rhs in
             let lhsDate = try lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
             let rhsDate = try rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast

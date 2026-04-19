@@ -61,10 +61,11 @@ final class DatabaseManager {
     private static func runMigrations(on dbQueue: DatabaseQueue) throws {
         var migrator = DatabaseMigrator()
 
-        // Always re-run migrations in development to catch issues early
-        #if DEBUG
-        migrator.eraseDatabaseOnSchemaChange = true
-        #endif
+        // Schema drift in a local data app must be an explicit destructive choice, not the DEBUG default.
+        if ProcessInfo.processInfo.environment["PROMPTPANEL_ERASE_ON_SCHEMA_CHANGE"] == "1" {
+            migrator.eraseDatabaseOnSchemaChange = true
+            PPLogger.database.warning("Schema-change erase mode enabled via PROMPTPANEL_ERASE_ON_SCHEMA_CHANGE")
+        }
 
         // Register all migrations
         Migrations.registerAll(&migrator)

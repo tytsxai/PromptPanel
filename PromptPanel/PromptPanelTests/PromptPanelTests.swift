@@ -87,6 +87,76 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(migratedEntry.projectId, targetProject.id)
     }
 
+    func testDeletingDefaultProjectFails() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+
+        XCTAssertThrowsError(try projectRepository.delete(id: defaultProject.id)) { error in
+            guard case RepositoryError.cannotDeleteDefault = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testDeletingNonEmptyProjectFailsWithEntryCount() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+
+        let project = Project(name: "Occupied")
+        try projectRepository.create(project)
+        try entryRepository.create(Entry(projectId: project.id, title: "Snippet", content: "echo hello"))
+
+        XCTAssertThrowsError(try projectRepository.delete(id: project.id)) { error in
+            guard case RepositoryError.projectNotEmpty(let count) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(count, 1)
+        }
+    }
+
+    func testEntrySearchServiceReturnsDefaultOnlyWhenDefaultProjectIsActive() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let searchService = EntrySearchService(entryRepository: entryRepository)
+
+        try entryRepository.create(Entry(projectId: defaultProject.id, title: "Common", content: "Shared content"))
+
+        let results = try searchService.search(
+            query: "",
+            currentProjectId: defaultProject.id,
+            defaultProjectId: defaultProject.id
+        )
+
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.projectId, defaultProject.id)
+    }
+
+    func testEntrySearchServiceReturnsMixedResultsForCurrentAndDefaultProjects() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let currentProject = Project(name: "Current")
+        try projectRepository.create(currentProject)
+        let searchService = EntrySearchService(entryRepository: entryRepository)
+
+        try entryRepository.create(Entry(projectId: defaultProject.id, title: "Common", content: "Shared content"))
+        try entryRepository.create(Entry(projectId: currentProject.id, title: "Current", content: "Current content"))
+
+        let results = try searchService.search(
+            query: "",
+            currentProjectId: currentProject.id,
+            defaultProjectId: defaultProject.id
+        )
+
+        XCTAssertEqual(results.count, 2)
+        XCTAssertEqual(Set(results.map(\.projectId)), Set([defaultProject.id, currentProject.id]))
+    }
+
     func testExecutionLogPersistsFailureReasonAndDiagnostics() throws {
         let databaseManager = try makeDatabaseManager()
         let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
@@ -134,6 +204,32 @@ final class PromptPanelTests: XCTestCase {
     }
 
     @MainActor
+    func testHotkeyServiceMigratesLegacyDefaultShortcut() {
+        let registrar = FakeHotkeyRegistrar()
+        let migrationDefaults = UserDefaults(suiteName: UUID().uuidString)!
+        let legacyShortcut = KeyboardShortcuts.Shortcut(.space, modifiers: [.option])
+        let originalShortcut = KeyboardShortcuts.Name.togglePanel.shortcut
+        defer {
+            KeyboardShortcuts.setShortcut(originalShortcut, for: .togglePanel)
+        }
+
+        KeyboardShortcuts.setShortcut(legacyShortcut, for: .togglePanel)
+        migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p")
+
+        let service = HotkeyService(
+            onTogglePanel: {},
+            registrar: registrar,
+            panelOpenTracker: nil,
+            userDefaults: migrationDefaults
+        )
+
+        service.start()
+
+        XCTAssertEqual(KeyboardShortcuts.Name.togglePanel.shortcut, KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift]))
+        XCTAssertTrue(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p"))
+    }
+
+    @MainActor
     func testQuickPanelPrepareForPresentationResetsStateAndRequestsFocus() throws {
         let databaseManager = try makeDatabaseManager()
         let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -164,7 +260,7 @@ final class PromptPanelTests: XCTestCase {
             appState: appState,
             projectRepository: projectRepository,
             settingsRepository: settingsRepository,
-            searchService: EntrySearchService(entryRepository: entryRepository, appState: appState),
+            searchService: EntrySearchService(entryRepository: entryRepository),
             executeService: executeService,
             permissionService: permissionService,
             panelOpenTracker: PanelOpenTracker(),
@@ -182,7 +278,143 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(viewModel.currentProjectId, currentProject.id)
         XCTAssertEqual(viewModel.focusToken, previousFocusToken + 1)
         XCTAssertFalse(viewModel.isExecutionReady)
-        XCTAssertFalse(viewModel.projectOptions.isEmpty)
+        XCTAssertFalse(viewModel.projects.isEmpty)
+    }
+
+    @MainActor
+    func testQuickPanelClearsResultsWhileAsyncSearchIsPending() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        try entryRepository.create(Entry(projectId: defaultProject.id, title: "Alpha", content: "Alpha body"))
+        try entryRepository.create(Entry(projectId: defaultProject.id, title: "Beta", content: "Beta body"))
+
+        let executeService = ExecuteService(
+            clipboardService: ClipboardService(),
+            pasteService: PasteService(),
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            targetApplicationProvider: { nil },
+            currentFrontApplicationProvider: { nil }
+        )
+
+        let viewModel = QuickPanelViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            settingsRepository: settingsRepository,
+            searchService: EntrySearchService(entryRepository: entryRepository),
+            executeService: executeService,
+            permissionService: permissionService,
+            panelOpenTracker: PanelOpenTracker(),
+            onClosePanel: {}
+        )
+
+        viewModel.prepareForPresentation()
+        let loadDeadline = Date().addingTimeInterval(1)
+        while viewModel.entries.count != 2 && Date() < loadDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+
+        XCTAssertEqual(viewModel.entries.count, 2)
+
+        viewModel.query = "Alpha"
+
+        XCTAssertTrue(viewModel.entries.isEmpty)
+        XCTAssertNil(viewModel.selectedEntry)
+    }
+
+    @MainActor
+    func testQuickPanelDoesNotUnlockExecutionWhenSearchFieldFocusFails() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let executeService = ExecuteService(
+            clipboardService: ClipboardService(),
+            pasteService: PasteService(),
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            targetApplicationProvider: { nil },
+            currentFrontApplicationProvider: { nil }
+        )
+
+        let viewModel = QuickPanelViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            settingsRepository: settingsRepository,
+            searchService: EntrySearchService(entryRepository: entryRepository),
+            executeService: executeService,
+            permissionService: permissionService,
+            panelOpenTracker: PanelOpenTracker(),
+            onClosePanel: {}
+        )
+
+        viewModel.prepareForPresentation()
+        viewModel.handleSearchFieldFocus(PanelFocusResult(token: viewModel.focusToken, succeeded: false))
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+
+        XCTAssertFalse(viewModel.isExecutionReady)
+    }
+
+    @MainActor
+    func testQuickPanelExecutionUnlocksAfterManualFocusRecovery() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let executeService = ExecuteService(
+            clipboardService: ClipboardService(),
+            pasteService: PasteService(),
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            targetApplicationProvider: { nil },
+            currentFrontApplicationProvider: { nil }
+        )
+
+        let viewModel = QuickPanelViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            settingsRepository: settingsRepository,
+            searchService: EntrySearchService(entryRepository: entryRepository),
+            executeService: executeService,
+            permissionService: permissionService,
+            panelOpenTracker: PanelOpenTracker(),
+            onClosePanel: {}
+        )
+
+        viewModel.prepareForPresentation()
+        let focusToken = viewModel.focusToken
+        viewModel.handleSearchFieldFocus(PanelFocusResult(token: focusToken, succeeded: false))
+        viewModel.handleSearchFieldFocus(
+            PanelFocusResult(token: focusToken, succeeded: true, attempt: Constants.panelFocusMaxAttempts)
+        )
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+
+        XCTAssertTrue(viewModel.isExecutionReady)
     }
 
     @MainActor
@@ -211,7 +443,7 @@ final class PromptPanelTests: XCTestCase {
             appState: appState,
             projectRepository: projectRepository,
             settingsRepository: settingsRepository,
-            searchService: EntrySearchService(entryRepository: entryRepository, appState: appState),
+            searchService: EntrySearchService(entryRepository: entryRepository),
             executeService: executeService,
             permissionService: permissionService,
             panelOpenTracker: PanelOpenTracker(),
@@ -232,6 +464,72 @@ final class PromptPanelTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
+    func testTargetApplicationRestoreMismatchRequiresConfirmedDifferentBundleId() {
+        XCTAssertFalse(
+            ExecuteService.isTargetApplicationRestoreMismatch(
+                expectedBundleId: "com.example.target",
+                observedBundleId: nil
+            )
+        )
+        XCTAssertFalse(
+            ExecuteService.isTargetApplicationRestoreMismatch(
+                expectedBundleId: nil,
+                observedBundleId: "com.example.target"
+            )
+        )
+        XCTAssertTrue(
+            ExecuteService.isTargetApplicationRestoreMismatch(
+                expectedBundleId: "com.example.target",
+                observedBundleId: "com.example.other"
+            )
+        )
+    }
+
+    @MainActor
+    func testQuickPanelRetryFocusAfterActivationStabilizedRequestsAnotherFocusCycle() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let executeService = ExecuteService(
+            clipboardService: ClipboardService(),
+            pasteService: PasteService(),
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            targetApplicationProvider: { nil },
+            currentFrontApplicationProvider: { nil }
+        )
+
+        let viewModel = QuickPanelViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            settingsRepository: settingsRepository,
+            searchService: EntrySearchService(entryRepository: entryRepository),
+            executeService: executeService,
+            permissionService: permissionService,
+            panelOpenTracker: PanelOpenTracker(),
+            onClosePanel: {}
+        )
+
+        viewModel.prepareForPresentation()
+        let initialFocusToken = viewModel.focusToken
+        viewModel.handleSearchFieldFocus(PanelFocusResult(token: initialFocusToken, succeeded: true))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+        XCTAssertTrue(viewModel.isExecutionReady)
+
+        viewModel.retryFocusAfterActivationStabilized()
+
+        XCTAssertEqual(viewModel.focusToken, initialFocusToken + 1)
+        XCTAssertFalse(viewModel.isExecutionReady)
+    }
+
     @MainActor
     func testPanelOpenTrackerRecordsDurations() {
         let tracker = PanelOpenTracker()
@@ -246,6 +544,32 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertNotNil(trace??.hotkeyToSearchFieldFocusedMs)
     }
 
+    func testPanelActivationActionRetriesUntilMaxAttempts() {
+        let unstableSnapshot = PanelActivationSnapshot(
+            appIsActive: false,
+            panelIsVisible: true,
+            panelIsKey: false
+        )
+        let stableSnapshot = PanelActivationSnapshot(
+            appIsActive: true,
+            panelIsVisible: true,
+            panelIsKey: true
+        )
+
+        XCTAssertEqual(
+            PanelService.activationAction(snapshot: unstableSnapshot, attempt: 0, maxAttempts: 3),
+            .retry(nextAttempt: 1)
+        )
+        XCTAssertEqual(
+            PanelService.activationAction(snapshot: unstableSnapshot, attempt: 3, maxAttempts: 3),
+            .failed
+        )
+        XCTAssertEqual(
+            PanelService.activationAction(snapshot: stableSnapshot, attempt: 1, maxAttempts: 3),
+            .stable
+        )
+    }
+
     func testPanelVisibilityCoordinatorTransitions() {
         let coordinator = PanelVisibilityCoordinator()
 
@@ -257,6 +581,18 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertTrue(coordinator.beginHide())
         coordinator.finishHide()
         XCTAssertEqual(coordinator.state, .hidden)
+    }
+
+    func testQuickPanelWindowCanBecomeKeyAndMain() {
+        let panel = QuickPanelWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+
+        XCTAssertTrue(panel.canBecomeKey)
+        XCTAssertTrue(panel.canBecomeMain)
     }
 
     func testDatabaseManagerRecoversFromCorruptedStore() throws {
@@ -280,6 +616,42 @@ final class PromptPanelTests: XCTestCase {
         )
     }
 
+    func testDatabaseManagerDoesNotQuarantineStoreWhenMigrationFails() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("sqlite")
+
+        let queue = try DatabaseQueue(path: databaseURL.path)
+        try queue.write { db in
+            try db.execute(sql: """
+                CREATE TABLE execution_logs (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    entry_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    front_app_bundle_id TEXT,
+                    observed_app_bundle_id TEXT,
+                    has_accessibility INTEGER NOT NULL,
+                    clipboard_success INTEGER NOT NULL,
+                    paste_attempted INTEGER NOT NULL,
+                    paste_success INTEGER NOT NULL,
+                    result TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """)
+            try db.execute(sql: "CREATE TABLE grdb_migrations (identifier TEXT PRIMARY KEY NOT NULL)")
+            try db.execute(sql: "INSERT INTO grdb_migrations(identifier) VALUES (?)", arguments: ["v1_create_tables"])
+        }
+
+        XCTAssertThrowsError(try DatabaseManager(url: databaseURL)) { error in
+            guard case DatabaseManager.InitializationError.migrationFailedPreservingStore = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: databaseURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: Constants.recoveryDirectory(for: databaseURL).path))
+    }
+
     func testStorageMaintenanceCreatesBackupAndPrunesOldCopies() throws {
         let databaseManager = try makeDatabaseManager()
         let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
@@ -297,6 +669,115 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(snapshot.backupCount, 1)
         XCTAssertLessThanOrEqual(snapshot.backupCount, Constants.automaticBackupRetentionCount)
         XCTAssertNotNil(snapshot.latestBackupURL)
+    }
+
+    func testLaunchMaintenanceDoesNotCreateExtraBackupAfterRecentManualBackup() throws {
+        let databaseManager = try makeDatabaseManager()
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let maintenanceService = StorageMaintenanceService(
+            dbQueue: databaseManager.dbQueue,
+            logRepository: logRepository,
+            databaseURL: databaseManager.databaseURL
+        )
+
+        let manualBackupURL = try maintenanceService.createManualBackup()
+        let beforeSnapshot = try maintenanceService.healthSnapshot()
+
+        _ = try maintenanceService.performLaunchMaintenance()
+
+        let afterSnapshot = try maintenanceService.healthSnapshot()
+        XCTAssertEqual(afterSnapshot.backupCount, beforeSnapshot.backupCount)
+        XCTAssertEqual(afterSnapshot.latestBackupURL?.lastPathComponent, manualBackupURL.lastPathComponent)
+    }
+
+    func testLogCleanupRemovesOnlyExpiredEntries() throws {
+        let databaseManager = try makeDatabaseManager()
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+
+        try logRepository.record(
+            ExecutionLog(
+                entryId: "recent",
+                projectId: "project-1",
+                hasAccessibility: true,
+                clipboardSuccess: true,
+                pasteAttempted: true,
+                pasteSuccess: true,
+                result: Constants.ExecutionResult.success.rawValue,
+                createdAt: Date()
+            )
+        )
+        try logRepository.record(
+            ExecutionLog(
+                entryId: "expired",
+                projectId: "project-1",
+                hasAccessibility: true,
+                clipboardSuccess: true,
+                pasteAttempted: false,
+                pasteSuccess: false,
+                result: Constants.ExecutionResult.clipboardOnly.rawValue,
+                createdAt: Calendar.current.date(byAdding: .day, value: -45, to: Date()) ?? .distantPast
+            )
+        )
+
+        try logRepository.cleanup(olderThanDays: 30)
+        let remaining = try logRepository.fetchRecent(limit: 10)
+
+        XCTAssertEqual(remaining.count, 1)
+        XCTAssertEqual(remaining.first?.entryId, "recent")
+    }
+
+    func testHealthSummaryCountsResultsAcrossOutcomes() throws {
+        let databaseManager = try makeDatabaseManager()
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let now = Date()
+
+        try logRepository.record(
+            ExecutionLog(
+                entryId: "success",
+                projectId: "project-1",
+                hasAccessibility: true,
+                clipboardSuccess: true,
+                pasteAttempted: true,
+                pasteSuccess: true,
+                result: Constants.ExecutionResult.success.rawValue,
+                createdAt: now
+            )
+        )
+        try logRepository.record(
+            ExecutionLog(
+                entryId: "clipboard-only",
+                projectId: "project-1",
+                hasAccessibility: false,
+                clipboardSuccess: true,
+                pasteAttempted: false,
+                pasteSuccess: false,
+                result: Constants.ExecutionResult.clipboardOnly.rawValue,
+                createdAt: now
+            )
+        )
+        try logRepository.record(
+            ExecutionLog(
+                entryId: "failed",
+                projectId: "project-1",
+                hasAccessibility: true,
+                clipboardSuccess: false,
+                pasteAttempted: false,
+                pasteSuccess: false,
+                result: Constants.ExecutionResult.failed.rawValue,
+                createdAt: now
+            )
+        )
+
+        let summary = try logRepository.fetchHealthSummary(
+            since: Calendar.current.date(byAdding: .day, value: -7, to: now) ?? .distantPast
+        )
+
+        XCTAssertEqual(summary.totalCount, 3)
+        XCTAssertEqual(summary.successCount, 1)
+        XCTAssertEqual(summary.clipboardOnlyCount, 1)
+        XCTAssertEqual(summary.failedCount, 1)
+        XCTAssertNotNil(summary.latestExecutionAt)
+        XCTAssertNotNil(summary.latestFailureAt)
     }
 }
 
@@ -389,6 +870,88 @@ func migrateAndDeleteMovesEntriesToTargetProject() throws {
 }
 
 @Test
+func deletingDefaultProjectFails() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let defaultProject = try #require(projectRepository.fetchDefault())
+
+    do {
+        try projectRepository.delete(id: defaultProject.id)
+        Issue.record("Expected deleting the default project to fail.")
+    } catch {
+        guard case RepositoryError.cannotDeleteDefault = error else {
+            Issue.record("Unexpected error: \(error)")
+            return
+        }
+    }
+}
+
+@Test
+func deletingNonEmptyProjectFailsWithEntryCount() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+
+    let project = Project(name: "Occupied")
+    try projectRepository.create(project)
+    try entryRepository.create(Entry(projectId: project.id, title: "Snippet", content: "echo hello"))
+
+    do {
+        try projectRepository.delete(id: project.id)
+        Issue.record("Expected deleting a non-empty project to fail.")
+    } catch {
+        guard case RepositoryError.projectNotEmpty(let count) = error else {
+            Issue.record("Unexpected error: \(error)")
+            return
+        }
+        #expect(count == 1)
+    }
+}
+
+@Test
+func entrySearchServiceReturnsDefaultOnlyWhenDefaultProjectIsActive() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    let searchService = EntrySearchService(entryRepository: entryRepository)
+
+    try entryRepository.create(Entry(projectId: defaultProject.id, title: "Common", content: "Shared content"))
+
+    let results = try searchService.search(
+        query: "",
+        currentProjectId: defaultProject.id,
+        defaultProjectId: defaultProject.id
+    )
+
+    #expect(results.count == 1)
+    #expect(results.first?.projectId == defaultProject.id)
+}
+
+@Test
+func entrySearchServiceReturnsMixedResultsForCurrentAndDefaultProjects() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    let currentProject = Project(name: "Current")
+    try projectRepository.create(currentProject)
+    let searchService = EntrySearchService(entryRepository: entryRepository)
+
+    try entryRepository.create(Entry(projectId: defaultProject.id, title: "Common", content: "Shared content"))
+    try entryRepository.create(Entry(projectId: currentProject.id, title: "Current", content: "Current content"))
+
+    let results = try searchService.search(
+        query: "",
+        currentProjectId: currentProject.id,
+        defaultProjectId: defaultProject.id
+    )
+
+    #expect(results.count == 2)
+    #expect(Set(results.map(\.projectId)) == Set([defaultProject.id, currentProject.id]))
+}
+
+@Test
 func executionLogPersistsFailureReasonAndDiagnostics() throws {
     let databaseManager = try makeDatabaseManager()
     let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
@@ -438,6 +1001,33 @@ func hotkeyServiceInvokesToggleAndStartsTrace() {
 
 @MainActor
 @Test
+func hotkeyServiceMigratesLegacyDefaultShortcut() {
+    let registrar = FakeHotkeyRegistrar()
+    let migrationDefaults = UserDefaults(suiteName: UUID().uuidString)!
+    let legacyShortcut = KeyboardShortcuts.Shortcut(.space, modifiers: [.option])
+    let originalShortcut = KeyboardShortcuts.Name.togglePanel.shortcut
+    defer {
+        KeyboardShortcuts.setShortcut(originalShortcut, for: .togglePanel)
+    }
+
+    KeyboardShortcuts.setShortcut(legacyShortcut, for: .togglePanel)
+    migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p")
+
+    let service = HotkeyService(
+        onTogglePanel: {},
+        registrar: registrar,
+        panelOpenTracker: nil,
+        userDefaults: migrationDefaults
+    )
+
+    service.start()
+
+    #expect(KeyboardShortcuts.Name.togglePanel.shortcut == KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift]))
+    #expect(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p"))
+}
+
+@MainActor
+@Test
 func quickPanelPrepareForPresentationResetsStateAndRequestsFocus() throws {
     let databaseManager = try makeDatabaseManager()
     let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -468,7 +1058,7 @@ func quickPanelPrepareForPresentationResetsStateAndRequestsFocus() throws {
         appState: appState,
         projectRepository: projectRepository,
         settingsRepository: settingsRepository,
-        searchService: EntrySearchService(entryRepository: entryRepository, appState: appState),
+        searchService: EntrySearchService(entryRepository: entryRepository),
         executeService: executeService,
         permissionService: permissionService,
         panelOpenTracker: PanelOpenTracker(),
@@ -486,7 +1076,146 @@ func quickPanelPrepareForPresentationResetsStateAndRequestsFocus() throws {
     #expect(viewModel.currentProjectId == currentProject.id)
     #expect(viewModel.focusToken == previousFocusToken + 1)
     #expect(viewModel.isExecutionReady == false)
-    #expect(!viewModel.projectOptions.isEmpty)
+    #expect(!viewModel.projects.isEmpty)
+}
+
+@MainActor
+@Test
+func quickPanelClearsResultsWhileAsyncSearchIsPending() async throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let permissionService = PermissionService()
+    let appState = AppState()
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+    try entryRepository.create(Entry(projectId: defaultProject.id, title: "Alpha", content: "Alpha body"))
+    try entryRepository.create(Entry(projectId: defaultProject.id, title: "Beta", content: "Beta body"))
+
+    let executeService = ExecuteService(
+        clipboardService: ClipboardService(),
+        pasteService: PasteService(),
+        entryRepository: entryRepository,
+        logRepository: logRepository,
+        permissionService: permissionService,
+        targetApplicationProvider: { nil },
+        currentFrontApplicationProvider: { nil }
+    )
+
+    let viewModel = QuickPanelViewModel(
+        appState: appState,
+        projectRepository: projectRepository,
+        settingsRepository: settingsRepository,
+        searchService: EntrySearchService(entryRepository: entryRepository),
+        executeService: executeService,
+        permissionService: permissionService,
+        panelOpenTracker: PanelOpenTracker(),
+        onClosePanel: {}
+    )
+
+    viewModel.prepareForPresentation()
+
+    let clock = ContinuousClock()
+    let deadline = clock.now + .seconds(1)
+    while viewModel.entries.count != 2 && clock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+
+    #expect(viewModel.entries.count == 2)
+
+    viewModel.query = "Alpha"
+
+    #expect(viewModel.entries.isEmpty)
+    #expect(viewModel.selectedEntry == nil)
+}
+
+@MainActor
+@Test
+func quickPanelDoesNotUnlockExecutionWhenSearchFieldFocusFails() async throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let permissionService = PermissionService()
+    let appState = AppState()
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+    let executeService = ExecuteService(
+        clipboardService: ClipboardService(),
+        pasteService: PasteService(),
+        entryRepository: entryRepository,
+        logRepository: logRepository,
+        permissionService: permissionService,
+        targetApplicationProvider: { nil },
+        currentFrontApplicationProvider: { nil }
+    )
+
+    let viewModel = QuickPanelViewModel(
+        appState: appState,
+        projectRepository: projectRepository,
+        settingsRepository: settingsRepository,
+        searchService: EntrySearchService(entryRepository: entryRepository),
+        executeService: executeService,
+        permissionService: permissionService,
+        panelOpenTracker: PanelOpenTracker(),
+        onClosePanel: {}
+    )
+
+    viewModel.prepareForPresentation()
+    viewModel.handleSearchFieldFocus(PanelFocusResult(token: viewModel.focusToken, succeeded: false))
+    try await Task.sleep(for: .milliseconds(100))
+
+    #expect(viewModel.isExecutionReady == false)
+}
+
+@MainActor
+@Test
+func quickPanelExecutionUnlocksAfterManualFocusRecovery() async throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let permissionService = PermissionService()
+    let appState = AppState()
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+    let executeService = ExecuteService(
+        clipboardService: ClipboardService(),
+        pasteService: PasteService(),
+        entryRepository: entryRepository,
+        logRepository: logRepository,
+        permissionService: permissionService,
+        targetApplicationProvider: { nil },
+        currentFrontApplicationProvider: { nil }
+    )
+
+    let viewModel = QuickPanelViewModel(
+        appState: appState,
+        projectRepository: projectRepository,
+        settingsRepository: settingsRepository,
+        searchService: EntrySearchService(entryRepository: entryRepository),
+        executeService: executeService,
+        permissionService: permissionService,
+        panelOpenTracker: PanelOpenTracker(),
+        onClosePanel: {}
+    )
+
+    viewModel.prepareForPresentation()
+    let focusToken = viewModel.focusToken
+    viewModel.handleSearchFieldFocus(PanelFocusResult(token: focusToken, succeeded: false))
+    viewModel.handleSearchFieldFocus(
+        PanelFocusResult(token: focusToken, succeeded: true, attempt: Constants.panelFocusMaxAttempts)
+    )
+    try await Task.sleep(for: .milliseconds(120))
+
+    #expect(viewModel.isExecutionReady == true)
 }
 
 @MainActor
@@ -516,7 +1245,7 @@ func quickPanelExecutionUnlocksAfterFocusResolution() async throws {
         appState: appState,
         projectRepository: projectRepository,
         settingsRepository: settingsRepository,
-        searchService: EntrySearchService(entryRepository: entryRepository, appState: appState),
+        searchService: EntrySearchService(entryRepository: entryRepository),
         executeService: executeService,
         permissionService: permissionService,
         panelOpenTracker: PanelOpenTracker(),
@@ -530,6 +1259,74 @@ func quickPanelExecutionUnlocksAfterFocusResolution() async throws {
     try await Task.sleep(for: .milliseconds(100))
 
     #expect(viewModel.isExecutionReady == true)
+}
+
+@Test
+func targetApplicationRestoreMismatchRequiresConfirmedDifferentBundleId() {
+    #expect(
+        ExecuteService.isTargetApplicationRestoreMismatch(
+            expectedBundleId: "com.example.target",
+            observedBundleId: nil
+        ) == false
+    )
+    #expect(
+        ExecuteService.isTargetApplicationRestoreMismatch(
+            expectedBundleId: nil,
+            observedBundleId: "com.example.target"
+        ) == false
+    )
+    #expect(
+        ExecuteService.isTargetApplicationRestoreMismatch(
+            expectedBundleId: "com.example.target",
+            observedBundleId: "com.example.other"
+        ) == true
+    )
+}
+
+@MainActor
+@Test
+func quickPanelRetryFocusAfterActivationStabilizedRequestsAnotherFocusCycle() async throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let permissionService = PermissionService()
+    let appState = AppState()
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+    let executeService = ExecuteService(
+        clipboardService: ClipboardService(),
+        pasteService: PasteService(),
+        entryRepository: entryRepository,
+        logRepository: logRepository,
+        permissionService: permissionService,
+        targetApplicationProvider: { nil },
+        currentFrontApplicationProvider: { nil }
+    )
+
+    let viewModel = QuickPanelViewModel(
+        appState: appState,
+        projectRepository: projectRepository,
+        settingsRepository: settingsRepository,
+        searchService: EntrySearchService(entryRepository: entryRepository),
+        executeService: executeService,
+        permissionService: permissionService,
+        panelOpenTracker: PanelOpenTracker(),
+        onClosePanel: {}
+    )
+
+    viewModel.prepareForPresentation()
+    let initialFocusToken = viewModel.focusToken
+    viewModel.handleSearchFieldFocus(PanelFocusResult(token: initialFocusToken, succeeded: true))
+    try await Task.sleep(for: .milliseconds(120))
+    #expect(viewModel.isExecutionReady == true)
+
+    viewModel.retryFocusAfterActivationStabilized()
+
+    #expect(viewModel.focusToken == initialFocusToken + 1)
+    #expect(viewModel.isExecutionReady == false)
 }
 
 @MainActor
@@ -548,6 +1345,59 @@ func panelOpenTrackerRecordsDurations() {
 }
 
 @Test
+func panelActivationActionRetriesUntilMaxAttempts() {
+    let unstableSnapshot = PanelActivationSnapshot(
+        appIsActive: false,
+        panelIsVisible: true,
+        panelIsKey: false
+    )
+    let stableSnapshot = PanelActivationSnapshot(
+        appIsActive: true,
+        panelIsVisible: true,
+        panelIsKey: true
+    )
+
+    #expect(
+        PanelService.activationAction(snapshot: unstableSnapshot, attempt: 0, maxAttempts: 3)
+            == .retry(nextAttempt: 1)
+    )
+    #expect(
+        PanelService.activationAction(snapshot: unstableSnapshot, attempt: 3, maxAttempts: 3)
+            == .failed
+    )
+    #expect(
+        PanelService.activationAction(snapshot: stableSnapshot, attempt: 1, maxAttempts: 3)
+            == .stable
+    )
+}
+
+@Test
+func activationPolicyIsRegularWhenPanelIsVisible() {
+    #expect(
+        PanelService.desiredActivationPolicy(
+            isPanelVisible: true,
+            isMainWindowVisible: false
+        ) == .regular
+    )
+}
+
+@Test
+func activationPolicyFallsBackToAccessoryOnlyWhenNoForegroundWindowIsVisible() {
+    #expect(
+        PanelService.desiredActivationPolicy(
+            isPanelVisible: false,
+            isMainWindowVisible: true
+        ) == .regular
+    )
+    #expect(
+        PanelService.desiredActivationPolicy(
+            isPanelVisible: false,
+            isMainWindowVisible: false
+        ) == .accessory
+    )
+}
+
+@Test
 func panelVisibilityCoordinatorTransitions() {
     let coordinator = PanelVisibilityCoordinator()
 
@@ -559,6 +1409,19 @@ func panelVisibilityCoordinatorTransitions() {
     #expect(coordinator.beginHide())
     coordinator.finishHide()
     #expect(coordinator.state == .hidden)
+}
+
+@Test
+func quickPanelWindowCanBecomeKeyAndMain() {
+    let panel = QuickPanelWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+        styleMask: [.titled],
+        backing: .buffered,
+        defer: false
+    )
+
+    #expect(panel.canBecomeKey)
+    #expect(panel.canBecomeMain)
 }
 
 @Test
@@ -598,6 +1461,118 @@ func storageMaintenanceCreatesBackupAndPrunesOldCopies() throws {
     #expect(snapshot.backupCount >= 1)
     #expect(snapshot.backupCount <= Constants.automaticBackupRetentionCount)
     #expect(snapshot.latestBackupURL != nil)
+}
+
+@Test
+func launchMaintenanceDoesNotCreateExtraBackupAfterRecentManualBackup() throws {
+    let databaseManager = try makeDatabaseManager()
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let maintenanceService = StorageMaintenanceService(
+        dbQueue: databaseManager.dbQueue,
+        logRepository: logRepository,
+        databaseURL: databaseManager.databaseURL
+    )
+
+    let manualBackupURL = try maintenanceService.createManualBackup()
+    let beforeSnapshot = try maintenanceService.healthSnapshot()
+
+    _ = try maintenanceService.performLaunchMaintenance()
+
+    let afterSnapshot = try maintenanceService.healthSnapshot()
+    #expect(afterSnapshot.backupCount == beforeSnapshot.backupCount)
+    #expect(afterSnapshot.latestBackupURL?.lastPathComponent == manualBackupURL.lastPathComponent)
+}
+
+@Test
+func logCleanupRemovesOnlyExpiredEntries() throws {
+    let databaseManager = try makeDatabaseManager()
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+
+    try logRepository.record(
+        ExecutionLog(
+            entryId: "recent",
+            projectId: "project-1",
+            hasAccessibility: true,
+            clipboardSuccess: true,
+            pasteAttempted: true,
+            pasteSuccess: true,
+            result: Constants.ExecutionResult.success.rawValue,
+            createdAt: Date()
+        )
+    )
+    try logRepository.record(
+        ExecutionLog(
+            entryId: "expired",
+            projectId: "project-1",
+            hasAccessibility: true,
+            clipboardSuccess: true,
+            pasteAttempted: false,
+            pasteSuccess: false,
+            result: Constants.ExecutionResult.clipboardOnly.rawValue,
+            createdAt: Calendar.current.date(byAdding: .day, value: -45, to: Date()) ?? .distantPast
+        )
+    )
+
+    try logRepository.cleanup(olderThanDays: 30)
+    let remaining = try logRepository.fetchRecent(limit: 10)
+
+    #expect(remaining.count == 1)
+    #expect(remaining.first?.entryId == "recent")
+}
+
+@Test
+func healthSummaryCountsResultsAcrossOutcomes() throws {
+    let databaseManager = try makeDatabaseManager()
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let now = Date()
+
+    try logRepository.record(
+        ExecutionLog(
+            entryId: "success",
+            projectId: "project-1",
+            hasAccessibility: true,
+            clipboardSuccess: true,
+            pasteAttempted: true,
+            pasteSuccess: true,
+            result: Constants.ExecutionResult.success.rawValue,
+            createdAt: now
+        )
+    )
+    try logRepository.record(
+        ExecutionLog(
+            entryId: "clipboard-only",
+            projectId: "project-1",
+            hasAccessibility: false,
+            clipboardSuccess: true,
+            pasteAttempted: false,
+            pasteSuccess: false,
+            result: Constants.ExecutionResult.clipboardOnly.rawValue,
+            createdAt: now
+        )
+    )
+    try logRepository.record(
+        ExecutionLog(
+            entryId: "failed",
+            projectId: "project-1",
+            hasAccessibility: true,
+            clipboardSuccess: false,
+            pasteAttempted: false,
+            pasteSuccess: false,
+            result: Constants.ExecutionResult.failed.rawValue,
+            createdAt: now
+        )
+    )
+
+    let summary = try logRepository.fetchHealthSummary(
+        since: Calendar.current.date(byAdding: .day, value: -7, to: now) ?? .distantPast
+    )
+
+    #expect(summary.totalCount == 3)
+    #expect(summary.successCount == 1)
+    #expect(summary.clipboardOnlyCount == 1)
+    #expect(summary.failedCount == 1)
+    #expect(summary.latestExecutionAt != nil)
+    #expect(summary.latestFailureAt != nil)
 }
 #endif
 

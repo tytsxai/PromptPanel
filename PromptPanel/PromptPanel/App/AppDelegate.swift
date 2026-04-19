@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var mainWindow: NSWindow?
+    private let launchMaintenanceQueue = DispatchQueue(label: "PromptPanel.launch-maintenance", qos: .utility)
 
     private(set) var databaseManager: DatabaseManager!
     private(set) var appState: AppState!
@@ -36,8 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         do {
             try initializeDependencies()
             try wireApplication()
+            scheduleLaunchMaintenance()
             permissionService.requestPermission()
             refreshPermissionState()
+            schedulePanelAutoOpenForQAIfNeeded()
             presentLaunchRecoveryAlertIfNeeded()
         } catch {
             PPLogger.app.error("Failed to initialize: \(error.localizedDescription)")
@@ -81,12 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             databaseURL: databaseManager.databaseURL
         )
 
-        do {
-            _ = try storageMaintenanceService.performLaunchMaintenance()
-        } catch {
-            PPLogger.database.error("Launch maintenance failed: \(error.localizedDescription)")
-        }
-
         let currentProjectId = try settingsRepository.getCurrentProjectId()
         let defaultProject = try projectRepository.fetchDefault()
 
@@ -111,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             }
         )
-        entrySearchService = EntrySearchService(entryRepository: entryRepository, appState: appState)
+        entrySearchService = EntrySearchService(entryRepository: entryRepository)
 
         executeService.onClosePanel = { [weak self] in
             self?.panelService.hide()
@@ -154,6 +151,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panelService.onWillShow = { [weak self] in
             self?.quickPanelViewModel.prepareForPresentation()
         }
+        panelService.onDidStabilizeActivation = { [weak self] in
+            self?.quickPanelViewModel.retryFocusAfterActivationStabilized()
+        }
 
         trayManager = TrayManager(
             onOpenMainWindow: { [weak self] in
@@ -174,6 +174,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hotkeyService.start()
     }
 
+    private func scheduleLaunchMaintenance() {
+        guard let storageMaintenanceService = storageMaintenanceService else {
+            return
+        }
+
+        launchMaintenanceQueue.async { [weak self, storageMaintenanceService] in
+            guard let self else {
+                return
+            }
+
+            do {
+                _ = try storageMaintenanceService.performLaunchMaintenance()
+                DispatchQueue.main.async {
+                    self.mainWindowViewModel?.refreshOperationalStatus()
+                }
+            } catch {
+                PPLogger.database.error("Launch maintenance failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func schedulePanelAutoOpenForQAIfNeeded() {
+        let environment = ProcessInfo.processInfo.environment
+        guard let rawValue = environment["PROMPTPANEL_QA_OPEN_PANEL_ON_LAUNCH"]?.lowercased(),
+              ["1", "true", "yes"].contains(rawValue) else {
+            return
+        }
+
+        let delayMs = Int(environment["PROMPTPANEL_QA_OPEN_PANEL_DELAY_MS"] ?? "") ?? 700
+        PPLogger.panel.info("Scheduling QA auto-open for panel after \(delayMs) ms")
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(max(delayMs, 0))) { [weak self] in
+            guard let self else {
+                return
+            }
+            guard self.appState.isPanelVisible == false else {
+                return
+            }
+            self.panelService.show()
+        }
+    }
+
     private func openMainWindow() {
         if mainWindow == nil {
             let contentView = MainWindowView(viewModel: mainWindowViewModel)
@@ -192,9 +233,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         mainWindowViewModel.load()
+        appState.isMainWindowVisible = true
+        updateAppActivationPolicy()
         mainWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        appState.isMainWindowVisible = true
     }
 
     private func refreshPermissionState() {
@@ -225,6 +267,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow, window == mainWindow {
             appState.isMainWindowVisible = false
+            updateAppActivationPolicy()
         }
+    }
+
+    private func updateAppActivationPolicy() {
+        let desiredPolicy = PanelService.desiredActivationPolicy(
+            isPanelVisible: appState.isPanelVisible,
+            isMainWindowVisible: appState.isMainWindowVisible
+        )
+
+        guard NSApp.activationPolicy() != desiredPolicy else {
+            return
+        }
+
+        guard NSApp.setActivationPolicy(desiredPolicy) else {
+            PPLogger.app.error("Failed to switch activation policy to \(String(describing: desiredPolicy))")
+            return
+        }
+
+        PPLogger.app.info("Switched activation policy to \(String(describing: desiredPolicy))")
     }
 }

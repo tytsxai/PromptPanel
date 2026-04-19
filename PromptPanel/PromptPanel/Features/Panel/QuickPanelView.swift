@@ -20,11 +20,11 @@ struct QuickPanelView: View {
         .frame(width: 680, height: 460)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThickMaterial)
+                .fill(Color.white.opacity(0.10))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         )
     }
 
@@ -57,7 +57,7 @@ struct QuickPanelView: View {
                 placeholder: "搜索标题或内容",
                 focusToken: viewModel.focusToken,
                 onMoveSelection: viewModel.moveSelection,
-                onSubmit: viewModel.executeSelection,
+                onSubmit: { viewModel.executeSelection() },
                 onEscape: viewModel.closePanel,
                 onFocusResolved: viewModel.handleSearchFieldFocus
             )
@@ -107,9 +107,11 @@ struct QuickPanelView: View {
     }
 
     private func entryRow(_ entry: Entry, index: Int) -> some View {
-        Button {
+        let isSelected = index == viewModel.selectedIndex
+
+        return Button {
             viewModel.selectEntry(at: index)
-            viewModel.executeSelection()
+            viewModel.executeSelection(force: true)
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -159,13 +161,15 @@ struct QuickPanelView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(index == viewModel.selectedIndex ? Color.accentColor.opacity(0.14) : Color.black.opacity(0.0001))
-            )
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.14))
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(index == viewModel.selectedIndex ? Color.accentColor.opacity(0.35) : Color.secondary.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.35) : Color.secondary.opacity(0.12), lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
