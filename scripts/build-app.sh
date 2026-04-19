@@ -12,6 +12,8 @@ SIGN_IDENTITY="none"
 ARCHIVE=1
 SHORT_VERSION_OVERRIDE=""
 BUILD_VERSION_OVERRIDE=""
+SPARKLE_FEED_URL=""
+SPARKLE_PUBLIC_ED_KEY=""
 
 usage() {
     cat <<'EOF'
@@ -24,6 +26,8 @@ Options:
   --no-archive            Skip zip archive creation.
   --short-version <ver>   Override CFBundleShortVersionString in the packaged app.
   --build-version <ver>   Override CFBundleVersion in the packaged app.
+  --sparkle-feed-url <u>  Inject SUFeedURL into the packaged app's Info.plist.
+  --sparkle-public-ed-key Inject SUPublicEDKey into the packaged app's Info.plist.
   --help                  Show this help message.
 EOF
 }
@@ -54,6 +58,14 @@ while [[ $# -gt 0 ]]; do
             BUILD_VERSION_OVERRIDE="$2"
             shift 2
             ;;
+        --sparkle-feed-url)
+            SPARKLE_FEED_URL="$2"
+            shift 2
+            ;;
+        --sparkle-public-ed-key)
+            SPARKLE_PUBLIC_ED_KEY="$2"
+            shift 2
+            ;;
         --help)
             usage
             exit 0
@@ -80,9 +92,11 @@ BIN_DIR="$(swift build --package-path "$PACKAGE_ROOT" -c "$CONFIGURATION" --show
 APP_PATH="${OUTPUT_ROOT}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_PATH}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
+FRAMEWORKS_DIR="${CONTENTS_DIR}/Frameworks"
+RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 
 rm -rf "$APP_PATH"
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
 
 cp "${PACKAGE_ROOT}/PromptPanel/Resources/Info.plist" "${CONTENTS_DIR}/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${APP_NAME}" "${CONTENTS_DIR}/Info.plist"
@@ -92,19 +106,56 @@ fi
 if [[ -n "$BUILD_VERSION_OVERRIDE" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_VERSION_OVERRIDE}" "${CONTENTS_DIR}/Info.plist"
 fi
+if [[ -n "$SPARKLE_FEED_URL" ]]; then
+    /usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL}" "${CONTENTS_DIR}/Info.plist" 2>/dev/null \
+        || /usr/libexec/PlistBuddy -c "Set :SUFeedURL ${SPARKLE_FEED_URL}" "${CONTENTS_DIR}/Info.plist"
+fi
+if [[ -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+    /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string ${SPARKLE_PUBLIC_ED_KEY}" "${CONTENTS_DIR}/Info.plist" 2>/dev/null \
+        || /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey ${SPARKLE_PUBLIC_ED_KEY}" "${CONTENTS_DIR}/Info.plist"
+fi
 
 cp "${BIN_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 chmod 755 "${MACOS_DIR}/${APP_NAME}"
 
 for bundle_path in "${BIN_DIR}"/*.bundle(N); do
-    cp -R "$bundle_path" "${APP_PATH}/"
+    cp -R "$bundle_path" "${RESOURCES_DIR}/"
 done
 
-if [[ "$SIGN_IDENTITY" != "none" ]]; then
-    echo "Signing app with identity: ${SIGN_IDENTITY}"
-    codesign --force --sign "$SIGN_IDENTITY" "${MACOS_DIR}/${APP_NAME}"
-    codesign --force --sign "$SIGN_IDENTITY" "${APP_PATH}"
+for framework_path in "${BIN_DIR}"/*.framework(N); do
+    cp -R "$framework_path" "${FRAMEWORKS_DIR}/"
+done
+
+for dylib_path in "${BIN_DIR}"/*.dylib(N); do
+    cp -R "$dylib_path" "${FRAMEWORKS_DIR}/"
+done
+
+if [[ -n "$(find "$FRAMEWORKS_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    if ! otool -l "${MACOS_DIR}/${APP_NAME}" | grep -q "@executable_path/../Frameworks"; then
+        install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${APP_NAME}"
+    fi
 fi
+
+if [[ "$SIGN_IDENTITY" == "none" ]]; then
+    for framework_path in "${FRAMEWORKS_DIR}"/*.framework(N); do
+        codesign --force --sign - "$framework_path"
+    done
+    for dylib_path in "${FRAMEWORKS_DIR}"/*.dylib(N); do
+        codesign --force --sign - "$dylib_path"
+    done
+    codesign --force --sign - "${APP_PATH}"
+elif [[ "$SIGN_IDENTITY" != "none" ]]; then
+    echo "Signing app with identity: ${SIGN_IDENTITY}"
+    for framework_path in "${FRAMEWORKS_DIR}"/*.framework(N); do
+        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$framework_path"
+    done
+    for dylib_path in "${FRAMEWORKS_DIR}"/*.dylib(N); do
+        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dylib_path"
+    done
+    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "${APP_PATH}"
+fi
+
+codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
 
 SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${CONTENTS_DIR}/Info.plist")"
 BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${CONTENTS_DIR}/Info.plist")"

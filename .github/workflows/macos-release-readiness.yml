@@ -1,0 +1,73 @@
+name: macOS Release Readiness
+
+on:
+  push:
+    branches:
+      - main
+      - 'linyi/**'
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: macos-14
+    defaults:
+      run:
+        shell: zsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          swift --version
+          xcrun --find xctest
+
+      - name: Validate shell scripts
+        run: |
+          zsh -n scripts/build-app.sh
+          zsh -n scripts/restore-backup.sh
+          zsh -n scripts/release-readiness.sh
+
+      - name: Restore script rejects non-PromptPanel backups
+        run: |
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          bad_backup="$tmp_dir/not-promptpanel.sqlite"
+          sqlite3 "$bad_backup" 'CREATE TABLE unrelated (id INTEGER PRIMARY KEY);'
+
+          if scripts/restore-backup.sh "$bad_backup"; then
+            echo "restore-backup.sh unexpectedly accepted an invalid backup" >&2
+            exit 1
+          fi
+
+      - name: Build package
+        working-directory: PromptPanel
+        run: swift build
+
+      - name: Run tests
+        working-directory: PromptPanel
+        run: swift test
+
+      - name: Build release app
+        run: scripts/build-app.sh --output-dir "$RUNNER_TEMP/promptpanel-release"
+
+      - name: Verify release bundle and archive
+        run: |
+          app_path="$RUNNER_TEMP/promptpanel-release/PromptPanel.app"
+          zip_path=$(echo "$RUNNER_TEMP"/promptpanel-release/PromptPanel-*.zip)
+          unzip_dir="$RUNNER_TEMP/promptpanel-unpacked"
+
+          test -d "$app_path"
+          test -f "$zip_path"
+
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          ditto -x -k "$zip_path" "$unzip_dir"
+          test -x "$unzip_dir/PromptPanel.app/Contents/MacOS/PromptPanel"
+          codesign --verify --deep --strict --verbose=1 "$unzip_dir/PromptPanel.app"
