@@ -8,6 +8,12 @@ final class QuickPanelViewModel: ObservableObject {
         case down
     }
 
+    enum StatusTone {
+        case info
+        case warning
+        case error
+    }
+
     @Published var query: String = "" {
         didSet {
             scheduleEntriesRefresh(delayMs: Constants.panelSearchDebounceMs)
@@ -19,6 +25,8 @@ final class QuickPanelViewModel: ObservableObject {
     @Published var selectedIndex: Int = 0
     @Published var focusToken: Int = 0
     @Published var statusMessage: String?
+    @Published private(set) var statusTone: StatusTone = .info
+    @Published private(set) var isLoadingEntries: Bool = false
     private(set) var isExecutionReady: Bool = false
 
     private let appState: AppState
@@ -73,7 +81,7 @@ final class QuickPanelViewModel: ObservableObject {
 
     func prepareForPresentation() {
         permissionService.refresh()
-        statusMessage = permissionService.isAccessibilityGranted ? nil : "当前为仅复制模式，授权后可恢复自动粘贴。"
+        applyBaseStatus()
         query = ""
         selectedIndex = 0
         currentProjectId = appState.effectiveProjectId
@@ -106,10 +114,14 @@ final class QuickPanelViewModel: ObservableObject {
 
     func setPanelPinned(_ isPinned: Bool) {
         guard onSetPanelPinned(isPinned) else {
-            statusMessage = "固定状态保存失败，请重试。"
+            setStatus("固定状态保存失败，请重试。", tone: .error)
             return
         }
-        statusMessage = nil
+        applyBaseStatus()
+    }
+
+    func openAccessibilitySettings() {
+        permissionService.openAccessibilitySettings()
     }
 
     func moveSelection(_ direction: SelectionDirection) {
@@ -172,7 +184,7 @@ final class QuickPanelViewModel: ObservableObject {
             scheduleEntriesRefresh(delayMs: 0)
         } catch {
             PPLogger.project.error("Failed to switch current project: \(error.localizedDescription)")
-            statusMessage = "切换项目失败，请重试。"
+            setStatus("切换项目失败，请重试。", tone: .error)
         }
     }
 
@@ -201,7 +213,7 @@ final class QuickPanelViewModel: ObservableObject {
         } catch {
             PPLogger.project.error("Failed to load projects for panel: \(error.localizedDescription)")
             projects = []
-            statusMessage = "加载项目失败，请重试。"
+            setStatus("加载项目失败，请重试。", tone: .error)
         }
     }
 
@@ -211,6 +223,7 @@ final class QuickPanelViewModel: ObservableObject {
         selectedIndex = 0
 
         guard !appState.effectiveProjectId.isEmpty || !currentProjectId.isEmpty else {
+            isLoadingEntries = false
             return
         }
 
@@ -220,6 +233,7 @@ final class QuickPanelViewModel: ObservableObject {
         let searchService = self.searchService
 
         appState.currentProjectId = effectiveCurrentProjectId
+        isLoadingEntries = true
         searchGeneration += 1
         let generation = searchGeneration
 
@@ -253,17 +267,20 @@ final class QuickPanelViewModel: ObservableObject {
 
                     switch result {
                     case .success(let entries):
+                        self.isLoadingEntries = false
                         self.entries = entries
                         if entries.isEmpty {
                             self.selectedIndex = 0
                         } else {
                             self.selectedIndex = min(self.selectedIndex, entries.count - 1)
                         }
+                        self.applyBaseStatus()
                     case .failure(let error):
                         PPLogger.search.error("Panel search failed: \(error.localizedDescription)")
+                        self.isLoadingEntries = false
                         self.entries = []
                         self.selectedIndex = 0
-                        self.statusMessage = "搜索失败，请稍后重试。"
+                        self.setStatus("搜索失败，请稍后重试。", tone: .error)
                     }
                 }
             }
@@ -286,5 +303,21 @@ final class QuickPanelViewModel: ObservableObject {
             self.isExecutionReady = true
             PPLogger.panel.info("execute_selection_unlocked focus_token=\(token) delay_ms=\(Constants.panelExecutionUnlockDelayMs)")
         }
+    }
+
+    private func applyBaseStatus() {
+        guard permissionService.isAccessibilityGranted == false else {
+            statusMessage = nil
+            statusTone = .info
+            return
+        }
+
+        statusMessage = "当前为仅复制模式，已复制但不会自动粘贴。授权辅助功能后可恢复完整执行。"
+        statusTone = .warning
+    }
+
+    private func setStatus(_ message: String, tone: StatusTone) {
+        statusMessage = message
+        statusTone = tone
     }
 }

@@ -16,7 +16,6 @@ final class PanelService {
     private let appState: AppState
     private let panelVisibilityCoordinator = PanelVisibilityCoordinator()
     private let panelOpenTracker: PanelOpenTracker?
-    private let panelContentInsets = NSEdgeInsets(top: 32, left: 20, bottom: 16, right: 20)
 
     /// Callback to create the panel content view.
     var contentViewProvider: (() -> NSView)?
@@ -116,8 +115,9 @@ final class PanelService {
 
     /// Create the NSPanel with proper configuration.
     private func createPanel() {
+        let windowSize = Constants.panelWindowSize
         let panel = QuickPanelWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 508),
+            contentRect: NSRect(origin: .zero, size: windowSize),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -178,10 +178,10 @@ final class PanelService {
         backgroundView.addSubview(contentView)
 
         NSLayoutConstraint.activate([
-            contentView.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor, constant: panelContentInsets.left),
-            contentView.trailingAnchor.constraint(equalTo: backgroundView.trailingAnchor, constant: -panelContentInsets.right),
-            contentView.topAnchor.constraint(equalTo: backgroundView.topAnchor, constant: panelContentInsets.top),
-            contentView.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -panelContentInsets.bottom)
+            contentView.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor, constant: Constants.panelContentInsets.left),
+            contentView.trailingAnchor.constraint(equalTo: backgroundView.trailingAnchor, constant: -Constants.panelContentInsets.right),
+            contentView.topAnchor.constraint(equalTo: backgroundView.topAnchor, constant: Constants.panelContentInsets.top),
+            contentView.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -Constants.panelContentInsets.bottom)
         ])
 
         return backgroundView

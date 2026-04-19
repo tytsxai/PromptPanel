@@ -10,6 +10,8 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(Constants.appName, "PromptPanel")
         XCTAssertEqual(Constants.bundleIdentifier, "com.promptpanel.app")
         XCTAssertEqual(Constants.defaultProjectName, "通用项目")
+        XCTAssertEqual(Constants.panelWindowSize.width, Constants.panelContentSize.width + Constants.panelContentInsets.left + Constants.panelContentInsets.right)
+        XCTAssertEqual(Constants.panelWindowSize.height, Constants.panelContentSize.height + Constants.panelContentInsets.top + Constants.panelContentInsets.bottom)
     }
 
     func testDatabaseSeedsDefaultProjectAndCurrentProject() throws {
@@ -385,7 +387,7 @@ final class PromptPanelTests: XCTestCase {
         }
 
         KeyboardShortcuts.setShortcut(legacyShortcut, for: .togglePanel)
-        migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p")
+        migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_2")
 
         let service = HotkeyService(
             onTogglePanel: {},
@@ -396,8 +398,97 @@ final class PromptPanelTests: XCTestCase {
 
         service.start()
 
-        XCTAssertEqual(KeyboardShortcuts.Name.togglePanel.shortcut, KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift]))
-        XCTAssertTrue(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p"))
+        XCTAssertEqual(KeyboardShortcuts.Name.togglePanel.shortcut, KeyboardShortcuts.Shortcut(.two, modifiers: [.option]))
+        XCTAssertTrue(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_2"))
+    }
+
+    @MainActor
+    func testHotkeyServiceMigratesPreviousPreferredShortcutToNewDefault() {
+        let registrar = FakeHotkeyRegistrar()
+        let migrationDefaults = UserDefaults(suiteName: UUID().uuidString)!
+        let previousPreferredShortcut = KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift])
+        let originalShortcut = KeyboardShortcuts.Name.togglePanel.shortcut
+        defer {
+            KeyboardShortcuts.setShortcut(originalShortcut, for: .togglePanel)
+        }
+
+        KeyboardShortcuts.setShortcut(previousPreferredShortcut, for: .togglePanel)
+        migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_2")
+
+        let service = HotkeyService(
+            onTogglePanel: {},
+            registrar: registrar,
+            panelOpenTracker: nil,
+            userDefaults: migrationDefaults
+        )
+
+        service.start()
+
+        XCTAssertEqual(KeyboardShortcuts.Name.togglePanel.shortcut, KeyboardShortcuts.Shortcut(.two, modifiers: [.option]))
+        XCTAssertTrue(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_2"))
+    }
+
+    func testAppLaunchCoordinatorReturnsNilWhenOnlyCurrentProcessExists() {
+        XCTAssertNil(
+            AppLaunchCoordinator.duplicateProcessIdentifier(
+                currentProcessIdentifier: 42,
+                runningProcessIdentifiers: [42]
+            )
+        )
+    }
+
+    func testAppLaunchCoordinatorReturnsExistingProcessWhenDuplicateExists() {
+        XCTAssertEqual(
+            AppLaunchCoordinator.duplicateProcessIdentifier(
+                currentProcessIdentifier: 42,
+                runningProcessIdentifiers: [42, 7, 7]
+            ),
+            7
+        )
+    }
+
+    func testAppLaunchCoordinatorSkipsDuplicateCheckWhenOverrideIsEnabled() {
+        XCTAssertTrue(
+            AppLaunchCoordinator.shouldSkipDuplicateCheck(
+                environment: [AppLaunchCoordinator.allowExistingInstanceEnvironmentKey: "1"]
+            )
+        )
+        XCTAssertFalse(AppLaunchCoordinator.shouldSkipDuplicateCheck(environment: [:]))
+    }
+
+    func testAppLaunchCoordinatorReturnsNilWhenDuplicateExitsDuringSettleWindow() {
+        var samples = [
+            [pid_t(42), pid_t(7)],
+            [pid_t(42)]
+        ]
+
+        let result = AppLaunchCoordinator.duplicateProcessIdentifierAfterSettling(
+            currentProcessIdentifier: 42,
+            timeoutMs: 20,
+            pollIntervalMs: 1,
+            runningProcessIdentifiersProvider: {
+                let next = samples.first ?? [pid_t(42)]
+                if samples.isEmpty == false {
+                    samples.removeFirst()
+                }
+                return next
+            },
+            sleep: { _ in }
+        )
+
+        XCTAssertNil(result)
+    }
+
+    func testAppLaunchCoordinatorReturnsDuplicateWhenItPersistsPastSettleWindow() {
+        let result = AppLaunchCoordinator.duplicateProcessIdentifierAfterSettling(
+            currentProcessIdentifier: 42,
+            timeoutMs: 0,
+            pollIntervalMs: 1,
+            runningProcessIdentifiersProvider: { [42, 7] },
+            sleep: { _ in }
+        )
+
+        XCTAssertEqual(result, 7)
     }
 
     @MainActor
@@ -976,6 +1067,8 @@ func constantsExist() {
     #expect(Constants.appName == "PromptPanel")
     #expect(Constants.bundleIdentifier == "com.promptpanel.app")
     #expect(Constants.defaultProjectName == "通用项目")
+    #expect(Constants.panelWindowSize.width == Constants.panelContentSize.width + Constants.panelContentInsets.left + Constants.panelContentInsets.right)
+    #expect(Constants.panelWindowSize.height == Constants.panelContentSize.height + Constants.panelContentInsets.top + Constants.panelContentInsets.bottom)
 }
 
 @Test
@@ -1198,7 +1291,7 @@ func hotkeyServiceMigratesLegacyDefaultShortcut() {
     }
 
     KeyboardShortcuts.setShortcut(legacyShortcut, for: .togglePanel)
-    migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p")
+    migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_2")
 
     let service = HotkeyService(
         onTogglePanel: {},
@@ -1209,8 +1302,102 @@ func hotkeyServiceMigratesLegacyDefaultShortcut() {
 
     service.start()
 
-    #expect(KeyboardShortcuts.Name.togglePanel.shortcut == KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift]))
-    #expect(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_shift_p"))
+    #expect(KeyboardShortcuts.Name.togglePanel.shortcut == KeyboardShortcuts.Shortcut(.two, modifiers: [.option]))
+    #expect(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_2"))
+}
+
+@MainActor
+@Test
+func hotkeyServiceMigratesPreviousPreferredShortcutToNewDefault() {
+    let registrar = FakeHotkeyRegistrar()
+    let migrationDefaults = UserDefaults(suiteName: UUID().uuidString)!
+    let previousPreferredShortcut = KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift])
+    let originalShortcut = KeyboardShortcuts.Name.togglePanel.shortcut
+    defer {
+        KeyboardShortcuts.setShortcut(originalShortcut, for: .togglePanel)
+    }
+
+    KeyboardShortcuts.setShortcut(previousPreferredShortcut, for: .togglePanel)
+    migrationDefaults.removeObject(forKey: "toggle_panel_shortcut_migrated_to_option_2")
+
+    let service = HotkeyService(
+        onTogglePanel: {},
+        registrar: registrar,
+        panelOpenTracker: nil,
+        userDefaults: migrationDefaults
+    )
+
+    service.start()
+
+    #expect(KeyboardShortcuts.Name.togglePanel.shortcut == KeyboardShortcuts.Shortcut(.two, modifiers: [.option]))
+    #expect(migrationDefaults.bool(forKey: "toggle_panel_shortcut_migrated_to_option_2"))
+}
+
+@Test
+func appLaunchCoordinatorReturnsNilWhenOnlyCurrentProcessExists() {
+    #expect(
+        AppLaunchCoordinator.duplicateProcessIdentifier(
+            currentProcessIdentifier: 42,
+            runningProcessIdentifiers: [42]
+        ) == nil
+    )
+}
+
+@Test
+func appLaunchCoordinatorReturnsExistingProcessWhenDuplicateExists() {
+    #expect(
+        AppLaunchCoordinator.duplicateProcessIdentifier(
+            currentProcessIdentifier: 42,
+            runningProcessIdentifiers: [42, 7, 7]
+        ) == 7
+    )
+}
+
+@Test
+func appLaunchCoordinatorSkipsDuplicateCheckWhenOverrideIsEnabled() {
+    #expect(
+        AppLaunchCoordinator.shouldSkipDuplicateCheck(
+            environment: [AppLaunchCoordinator.allowExistingInstanceEnvironmentKey: "1"]
+        )
+    )
+    #expect(!AppLaunchCoordinator.shouldSkipDuplicateCheck(environment: [:]))
+}
+
+@Test
+func appLaunchCoordinatorReturnsNilWhenDuplicateExitsDuringSettleWindow() {
+    var samples = [
+        [pid_t(42), pid_t(7)],
+        [pid_t(42)]
+    ]
+
+    let result = AppLaunchCoordinator.duplicateProcessIdentifierAfterSettling(
+        currentProcessIdentifier: 42,
+        timeoutMs: 20,
+        pollIntervalMs: 1,
+        runningProcessIdentifiersProvider: {
+            let next = samples.first ?? [pid_t(42)]
+            if !samples.isEmpty {
+                samples.removeFirst()
+            }
+            return next
+        },
+        sleep: { _ in }
+    )
+
+    #expect(result == nil)
+}
+
+@Test
+func appLaunchCoordinatorReturnsDuplicateWhenItPersistsPastSettleWindow() {
+    let result = AppLaunchCoordinator.duplicateProcessIdentifierAfterSettling(
+        currentProcessIdentifier: 42,
+        timeoutMs: 0,
+        pollIntervalMs: 1,
+        runningProcessIdentifiersProvider: { [42, 7] },
+        sleep: { _ in }
+    )
+
+    #expect(result == 7)
 }
 
 @MainActor

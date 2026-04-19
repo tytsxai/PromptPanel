@@ -1,12 +1,13 @@
 import Foundation
 import KeyboardShortcuts
 
-private let preferredTogglePanelShortcut = KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift])
-private let deprecatedTogglePanelShortcuts = [
+private let preferredTogglePanelShortcut = KeyboardShortcuts.Shortcut(.two, modifiers: [.option])
+private let migratableDefaultTogglePanelShortcuts = [
     KeyboardShortcuts.Shortcut(.space, modifiers: [.option]),
     KeyboardShortcuts.Shortcut(.space, modifiers: [.option, .shift]),
+    KeyboardShortcuts.Shortcut(.p, modifiers: [.option, .shift]),
 ]
-private let togglePanelShortcutMigrationFlagKey = "toggle_panel_shortcut_migrated_to_option_shift_p"
+private let togglePanelShortcutMigrationFlagKey = "toggle_panel_shortcut_migrated_to_option_2"
 
 // MARK: - Hotkey Name Registration
 
@@ -78,7 +79,7 @@ final class HotkeyService {
         guard let currentShortcut = KeyboardShortcuts.Name.togglePanel.shortcut else {
             return
         }
-        guard deprecatedTogglePanelShortcuts.contains(currentShortcut) else {
+        guard migratableDefaultTogglePanelShortcuts.contains(currentShortcut) else {
             return
         }
 

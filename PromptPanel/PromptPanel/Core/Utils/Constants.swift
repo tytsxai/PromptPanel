@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Global constants for PromptPanel
@@ -84,6 +85,14 @@ enum Constants {
 
     // MARK: - Panel Performance
 
+    static let panelContentInsets = NSEdgeInsets(top: 24, left: 16, bottom: 16, right: 16)
+    static let panelContentSize = NSSize(width: 700, height: 468)
+    static var panelWindowSize: NSSize {
+        NSSize(
+            width: panelContentSize.width + panelContentInsets.left + panelContentInsets.right,
+            height: panelContentSize.height + panelContentInsets.top + panelContentInsets.bottom
+        )
+    }
     static let panelOpenLatencyTargetMs = 300
     static let panelExecutionUnlockDelayMs = 50
     static let panelActivationRetryDelayMs = 60

@@ -14,11 +14,15 @@ struct KeyAwareSearchField: NSViewRepresentable {
     func makeNSView(context: Context) -> PromptSearchField {
         let field = PromptSearchField()
         field.delegate = context.coordinator
-        field.placeholderString = placeholder
+        field.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
         field.font = .systemFont(ofSize: 15)
         field.sendsSearchStringImmediately = true
         field.sendsWholeSearchString = false
-        field.focusRingType = .default
         field.keyHandler = { event in
             switch Int(event.keyCode) {
             case 126:
@@ -218,10 +222,84 @@ struct KeyAwareSearchField: NSViewRepresentable {
 final class PromptSearchField: NSSearchField {
     var keyHandler: ((NSEvent) -> Bool)?
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureAppearance()
+    }
+
     override func keyDown(with event: NSEvent) {
         if keyHandler?(event) == true {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func textDidBeginEditing(_ notification: Notification) {
+        super.textDidBeginEditing(notification)
+        applyAppearance(isFocused: true)
+    }
+
+    override func textDidEndEditing(_ notification: Notification) {
+        super.textDidEndEditing(notification)
+        applyAppearance(isFocused: false)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecomeFirstResponder = super.becomeFirstResponder()
+        if didBecomeFirstResponder {
+            applyAppearance(isFocused: true)
+        }
+        return didBecomeFirstResponder
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let didResignFirstResponder = super.resignFirstResponder()
+        if didResignFirstResponder {
+            applyAppearance(isFocused: false)
+        }
+        return didResignFirstResponder
+    }
+
+    private func configureAppearance() {
+        focusRingType = .none
+        isBordered = false
+        drawsBackground = false
+        wantsLayer = true
+        maximumRecents = 0
+        recentsAutosaveName = nil
+        translatesAutoresizingMaskIntoConstraints = false
+        lineBreakMode = .byTruncatingTail
+        cell?.usesSingleLineMode = true
+        applyAppearance(isFocused: false)
+    }
+
+    private func applyAppearance(isFocused: Bool) {
+        guard let layer else {
+            return
+        }
+
+        let focusedBorderColor = NSColor(
+            calibratedRed: 0.98,
+            green: 0.63,
+            blue: 0.38,
+            alpha: isFocused ? 0.72 : 0.0
+        )
+        let unfocusedBorderColor = NSColor.white.withAlphaComponent(0.10)
+        let backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.08)
+
+        layer.cornerRadius = 16
+        layer.cornerCurve = .continuous
+        layer.borderWidth = isFocused ? 1.5 : 1
+        layer.backgroundColor = backgroundColor.cgColor
+        layer.borderColor = (isFocused ? focusedBorderColor : unfocusedBorderColor).cgColor
+        layer.shadowColor = focusedBorderColor.cgColor
+        layer.shadowOpacity = isFocused ? 0.22 : 0
+        layer.shadowRadius = isFocused ? 14 : 0
+        layer.shadowOffset = .zero
     }
 }

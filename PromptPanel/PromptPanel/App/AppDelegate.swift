@@ -1,6 +1,60 @@
 import Cocoa
 import SwiftUI
 
+struct AppInstanceDescriptor: Equatable {
+    let processIdentifier: pid_t
+}
+
+enum AppLaunchCoordinator {
+    static let allowExistingInstanceEnvironmentKey = "PROMPTPANEL_ALLOW_EXISTING_INSTANCE"
+    static let duplicateInstanceSettleTimeoutMs = 2_000
+    static let duplicateInstancePollIntervalMs = 100
+
+    static func runningInstances(bundleIdentifier: String) -> [AppInstanceDescriptor] {
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .map { AppInstanceDescriptor(processIdentifier: $0.processIdentifier) }
+    }
+
+    static func shouldSkipDuplicateCheck(environment: [String: String]) -> Bool {
+        environment[allowExistingInstanceEnvironmentKey] == "1"
+    }
+
+    static func duplicateProcessIdentifier(
+        currentProcessIdentifier: pid_t,
+        runningProcessIdentifiers: [pid_t]
+    ) -> pid_t? {
+        Array(Set(runningProcessIdentifiers))
+            .filter { $0 != currentProcessIdentifier }
+            .sorted()
+            .first
+    }
+
+    static func duplicateProcessIdentifierAfterSettling(
+        currentProcessIdentifier: pid_t,
+        timeoutMs: Int = duplicateInstanceSettleTimeoutMs,
+        pollIntervalMs: Int = duplicateInstancePollIntervalMs,
+        runningProcessIdentifiersProvider: () -> [pid_t],
+        sleep: (UInt32) -> Void = { usleep($0) }
+    ) -> pid_t? {
+        let deadline = DispatchTime.now().uptimeNanoseconds + UInt64(max(timeoutMs, 0)) * 1_000_000
+        let pollIntervalUs = UInt32(max(pollIntervalMs, 0) * 1_000)
+        var duplicatePid = duplicateProcessIdentifier(
+            currentProcessIdentifier: currentProcessIdentifier,
+            runningProcessIdentifiers: runningProcessIdentifiersProvider()
+        )
+
+        while duplicatePid != nil && DispatchTime.now().uptimeNanoseconds < deadline {
+            sleep(pollIntervalUs)
+            duplicatePid = duplicateProcessIdentifier(
+                currentProcessIdentifier: currentProcessIdentifier,
+                runningProcessIdentifiers: runningProcessIdentifiersProvider()
+            )
+        }
+
+        return duplicatePid
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var mainWindow: NSWindow?
@@ -35,12 +89,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         PPLogger.app.info("Application did finish launching")
 
+        if terminateForExistingInstanceIfNeeded() {
+            return
+        }
+
         do {
             try initializeDependencies()
             try wireApplication()
             scheduleLaunchMaintenance()
             updaterService.start()
-            permissionService.requestPermission()
             refreshPermissionState()
             schedulePanelAutoOpenForQAIfNeeded()
             presentLaunchRecoveryAlertIfNeeded()
@@ -53,6 +110,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             alert.runModal()
             NSApp.terminate(nil)
         }
+    }
+
+    @discardableResult
+    private func terminateForExistingInstanceIfNeeded(
+        runningInstances: [AppInstanceDescriptor]? = nil
+    ) -> Bool {
+        if AppLaunchCoordinator.shouldSkipDuplicateCheck(environment: ProcessInfo.processInfo.environment) {
+            PPLogger.app.notice("Skipping duplicate-instance termination because allow-existing-instance override is set")
+            return false
+        }
+
+        let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+        let runningProcessIdentifiersProvider = {
+            (runningInstances ?? AppLaunchCoordinator.runningInstances(bundleIdentifier: Constants.bundleIdentifier))
+                .map(\.processIdentifier)
+        }
+        guard let existingProcessIdentifier = AppLaunchCoordinator.duplicateProcessIdentifierAfterSettling(
+            currentProcessIdentifier: currentProcessIdentifier,
+            runningProcessIdentifiersProvider: runningProcessIdentifiersProvider
+        ) else {
+            return false
+        }
+
+        PPLogger.app.warning(
+            "Detected duplicate PromptPanel instance current_pid=\(currentProcessIdentifier) existing_pid=\(existingProcessIdentifier); terminating newer process"
+        )
+        if let existingApplication = NSRunningApplication(processIdentifier: existingProcessIdentifier) {
+            _ = existingApplication.activate(options: [])
+        }
+        NSApp.terminate(nil)
+        return true
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

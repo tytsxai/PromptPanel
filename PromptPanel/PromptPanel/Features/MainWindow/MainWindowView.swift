@@ -1,3 +1,4 @@
+import Foundation
 import KeyboardShortcuts
 import SwiftUI
 
@@ -148,23 +149,19 @@ struct MainWindowView: View {
                     Button("新建词条") {
                         viewModel.startCreateEntry()
                     }
+                    .buttonStyle(.borderedProminent)
                 }
 
                 if let bannerMessage = viewModel.bannerMessage {
-                    Text(bannerMessage)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
-                        )
+                    detailBanner(message: bannerMessage)
                 }
 
-                TextField("按标题或内容搜索词条", text: $viewModel.entrySearchText)
-                    .textFieldStyle(.roundedBorder)
+                HStack(spacing: 12) {
+                    searchFieldCard
+
+                    detailStatPill(title: "词条", value: "\(viewModel.entries.count)")
+                    detailStatPill(title: "当前项目", value: currentProjectName)
+                }
 
                 if viewModel.entries.isEmpty {
                     ContentUnavailableView(
@@ -172,67 +169,19 @@ struct MainWindowView: View {
                         systemImage: "text.badge.plus",
                         description: Text("在当前项目下新增词条后，这里会立刻显示。")
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(detailListSurface)
                 } else {
-                    List(viewModel.entries) { entry in
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 8) {
-                                Text(entry.title)
-                                    .font(.headline)
-
-                                if entry.isPinned {
-                                    capsuleLabel("置顶")
-                                }
-
-                                capsuleLabel(entry.type)
-
-                                if let project = viewModel.projectOptions.first(where: { $0.id == entry.projectId }) {
-                                    capsuleLabel(project.name)
-                                }
-
-                                Spacer()
-
-                                Menu("操作") {
-                                    Button("编辑") {
-                                        viewModel.startEditEntry(entry)
-                                    }
-                                    Button("删除", role: .destructive) {
-                                        viewModel.requestDeleteEntry(entry)
-                                    }
-                                }
-                            }
-
-                            Text(previewText(for: entry.content))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(3)
-
-                            HStack {
-                                Text("排序 \(entry.sortOrder)")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                                Spacer()
-                                Text("使用 \(entry.useCount)")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.entries) { entry in
+                                entryCard(entry)
                             }
                         }
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            viewModel.startEditEntry(entry)
-                        }
-                        .contextMenu {
-                            Button("编辑") {
-                                viewModel.startEditEntry(entry)
-                            }
-                            Button("删除", role: .destructive) {
-                                viewModel.requestDeleteEntry(entry)
-                            }
-                        }
+                        .padding(14)
                     }
-                    .listStyle(.inset)
-                    .scrollContentBackground(.hidden)
-                    .background(.clear)
+                    .background(detailListSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 }
             }
             .padding(20)
@@ -446,6 +395,211 @@ struct MainWindowView: View {
             .padding(.vertical, 3)
             .background(Capsule().fill(Color.secondary.opacity(0.12)))
             .foregroundStyle(.secondary)
+    }
+
+    private func detailBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles.rectangle.stack")
+                .font(.headline)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.42),
+                            Color.white.opacity(0.18)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.38), lineWidth: 1)
+        )
+    }
+
+    private var searchFieldCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("按标题或内容搜索词条", text: $viewModel.entrySearchText)
+                .textFieldStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.42))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.34), lineWidth: 1)
+        )
+        .frame(maxWidth: .infinity)
+    }
+
+    private func detailStatPill(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.34))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.24), lineWidth: 1)
+        )
+    }
+
+    private func entryCard(_ entry: Entry) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(entry.title)
+                            .font(.headline)
+
+                        if entry.isPinned {
+                            capsuleLabel("置顶")
+                        }
+
+                        if let projectName = projectName(for: entry) {
+                            capsuleLabel(projectName)
+                        }
+                    }
+
+                    Text(previewText(for: entry.content))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 8) {
+                    Button("编辑") {
+                        viewModel.startEditEntry(entry)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Menu {
+                        Button("编辑") {
+                            viewModel.startEditEntry(entry)
+                        }
+                        Button("删除", role: .destructive) {
+                            viewModel.requestDeleteEntry(entry)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+            }
+
+            HStack(spacing: 8) {
+                cardMetaPill(title: "排序", value: "\(entry.sortOrder)")
+                cardMetaPill(title: "使用", value: "\(entry.useCount)")
+
+                if let lastUsedAt = entry.lastUsedAt {
+                    cardMetaPill(title: "最近使用", value: relativeDateText(for: lastUsedAt))
+                }
+
+                Spacer(minLength: 0)
+
+                Text("双击可直接编辑")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.42))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.30), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onTapGesture(count: 2) {
+            viewModel.startEditEntry(entry)
+        }
+        .contextMenu {
+            Button("编辑") {
+                viewModel.startEditEntry(entry)
+            }
+            Button("删除", role: .destructive) {
+                viewModel.requestDeleteEntry(entry)
+            }
+        }
+    }
+
+    private func projectName(for entry: Entry) -> String? {
+        viewModel.projectOptions.first(where: { $0.id == entry.projectId })?.name
+    }
+
+    private func cardMetaPill(title: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.secondary.opacity(0.10)))
+    }
+
+    private func relativeDateText(for date: Date) -> String {
+        RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    }
+
+    private var detailListSurface: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.28),
+                        Color.white.opacity(0.14)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.30), lineWidth: 1)
+            )
     }
 
     private func permissionStateLabel(_ text: String) -> some View {
@@ -741,16 +895,21 @@ private struct EntryEditorSheet: View {
                 }
             }
 
-            Picker("类型", selection: $draft.type) {
-                ForEach(Constants.EntryType.allCases, id: \.rawValue) { type in
-                    Text(type.rawValue).tag(type.rawValue)
+            DisclosureGroup("高级设置") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker("类型", selection: $draft.type) {
+                        ForEach(Constants.EntryType.allCases, id: \.rawValue) { type in
+                            Text(type.rawValue).tag(type.rawValue)
+                        }
+                    }
+
+                    Toggle("置顶", isOn: $draft.isPinned)
+
+                    Stepper(value: $draft.sortOrder, in: -999...999) {
+                        Text("排序值：\(draft.sortOrder)")
+                    }
                 }
-            }
-
-            Toggle("置顶", isOn: $draft.isPinned)
-
-            Stepper(value: $draft.sortOrder, in: -999...999) {
-                Text("排序值：\(draft.sortOrder)")
+                .padding(.top, 8)
             }
 
             Text("内容")
