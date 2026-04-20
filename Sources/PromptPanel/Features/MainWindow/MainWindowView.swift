@@ -127,7 +127,7 @@ struct MainWindowView: View {
         .padding(2)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(red: 0.08, green: 0.09, blue: 0.10).opacity(0.8))
+                .fill(Constants.VisualStyle.tintSubtle)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
