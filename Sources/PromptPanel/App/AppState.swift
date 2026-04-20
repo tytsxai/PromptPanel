@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     @Published var panelContentSize: NSSize = Constants.panelContentSize
     @Published var panelShowFooter: Bool = true
     @Published var panelCompactRows: Bool = false
+    @Published var appTheme: AppTheme = .system
 
     // MARK: - Main Window State
 
@@ -44,7 +45,8 @@ final class AppState: ObservableObject {
         isPanelPinned: Bool = false,
         panelContentSize: NSSize = Constants.panelContentSize,
         panelShowFooter: Bool = true,
-        panelCompactRows: Bool = false
+        panelCompactRows: Bool = false,
+        appTheme: AppTheme = .system
     ) {
         self.currentProjectId = currentProjectId
         self.defaultProjectId = defaultProjectId
@@ -52,8 +54,9 @@ final class AppState: ObservableObject {
         self.panelContentSize = panelContentSize
         self.panelShowFooter = panelShowFooter
         self.panelCompactRows = panelCompactRows
+        self.appTheme = appTheme
         PPLogger.app.info(
-            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height)), showFooter=\(panelShowFooter), compact=\(panelCompactRows)"
+            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height)), showFooter=\(panelShowFooter), compact=\(panelCompactRows), theme=\(appTheme.rawValue)"
         )
     }
 

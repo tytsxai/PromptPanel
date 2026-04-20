@@ -1,4 +1,5 @@
 import Cocoa
+import Combine
 import SwiftUI
 
 struct AppInstanceDescriptor: Equatable {
@@ -85,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private var quickPanelViewModel: QuickPanelViewModel!
     private var mainWindowViewModel: MainWindowViewModel!
+    private var themeCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         PPLogger.app.info("Application did finish launching")
@@ -182,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let panelContentSize = try settingsRepository.getPanelContentSize()
         let panelShowFooter = try settingsRepository.isPanelFooterVisible()
         let panelCompactRows = try settingsRepository.isPanelCompactRows()
+        let appTheme = try settingsRepository.getAppTheme()
 
         appState.loadPersistedState(
             currentProjectId: currentProjectId,
@@ -189,7 +192,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             isPanelPinned: isPanelPinned,
             panelContentSize: panelContentSize,
             panelShowFooter: panelShowFooter,
-            panelCompactRows: panelCompactRows
+            panelCompactRows: panelCompactRows,
+            appTheme: appTheme
         )
     }
 
@@ -283,6 +287,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         trayManager.setup()
 
+        // Keep NSWindow / NSPanel chrome in sync with the user's theme.
+        themeCancellable = appState.$appTheme
+            .receive(on: RunLoop.main)
+            .sink { [weak self] theme in
+                self?.applyAppearance(theme)
+            }
+        applyAppearance(appState.appTheme)
+
         hotkeyService = HotkeyService(
             onTogglePanel: { [weak self] in
                 self?.panelService.toggle()
@@ -342,31 +354,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let delayMs = Int(environment["PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS"] ?? "") ?? 500
         let targetTab = qaMainWindowTargetTab(from: environment["PROMPTPANEL_QA_MAIN_WINDOW_TAB"])
-        let targetSection = qaSettingsSection(from: environment["PROMPTPANEL_QA_SETTINGS_SECTION"])
         PPLogger.app.info("Scheduling QA auto-open for main window after \(delayMs) ms")
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(max(delayMs, 0))) { [weak self] in
             guard let self else { return }
-            if let targetSection {
-                self.mainWindowViewModel.settingsSection = targetSection
-            }
             self.openMainWindow(targetTab: targetTab)
-        }
-    }
-
-    private func qaSettingsSection(from rawValue: String?) -> MainWindowViewModel.SettingsSection? {
-        guard let rawValue = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-              !rawValue.isEmpty else {
-            return nil
-        }
-        switch rawValue {
-        case "general":
-            return .general
-        case "backup":
-            return .backup
-        case "about":
-            return .about
-        default:
-            return nil
         }
     }
 
@@ -421,6 +412,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func refreshPermissionState() {
         permissionService.refresh()
         appState.hasAccessibilityPermission = permissionService.isAccessibilityGranted
+    }
+
+    /// Apply the user's theme choice to every NSWindow/NSPanel we own.
+    ///
+    /// SwiftUI's `.preferredColorScheme` covers the content hierarchy, but
+    /// the NSWindow chrome (traffic lights / titlebar) and offscreen panels
+    /// need an explicit `appearance` so that dynamic `NSColor` providers
+    /// resolve consistently.
+    private func applyAppearance(_ theme: AppTheme) {
+        let appearance: NSAppearance? = {
+            switch theme {
+            case .system: return nil
+            case .light:  return NSAppearance(named: .aqua)
+            case .dark:   return NSAppearance(named: .darkAqua)
+            }
+        }()
+        NSApp.appearance = appearance
+        mainWindow?.appearance = appearance
+        panelService?.setAppearance(appearance)
     }
 
     private func updatePanelPinnedState(_ isPinned: Bool) -> Bool {

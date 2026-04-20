@@ -16,10 +16,11 @@ usage() {
     cat <<'EOF'
 Usage: scripts/capture-ui-qa.sh [--skip-build] [--output-dir <path>]
 
-Captures three window-cropped QA screenshots at the unified default sizes:
-  - panel.png       (快捷面板 780x440)
-  - library.png     (主窗口 · 内容库 1100x740)
-  - settings.png    (主窗口 · 设置 1100x740)
+Captures six window-cropped QA screenshots (dark + light for each surface)
+at the unified default sizes:
+  - panel-dark.png    / panel-light.png       (快捷面板 780x440)
+  - library-dark.png  / library-light.png     (主窗口 · 内容库 1100x740)
+  - settings-dark.png / settings-light.png    (主窗口 · 设置 1100x740)
 EOF
 }
 
@@ -105,6 +106,14 @@ INSERT INTO app_settings (key, value) VALUES
   ('current_project_id', 'proj-promptpanel')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 COMMIT;
+SQL
+}
+
+set_app_theme() {
+    local theme="$1"  # system | light | dark
+    sqlite3 "$DATABASE_PATH" <<SQL
+INSERT INTO app_settings (key, value) VALUES ('app_theme', '$theme')
+ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 SQL
 }
 
@@ -215,7 +224,7 @@ assert_capture_set() {
     local missing=0
     local name
 
-    for name in panel.png library.png settings.png; do
+    for name in panel-dark.png panel-light.png library-dark.png library-light.png settings-dark.png settings-light.png; do
         if ! [[ -s "$OUTPUT_DIR/$name" ]] || ! sips -g pixelWidth -g pixelHeight "$OUTPUT_DIR/$name" >/dev/null 2>&1; then
             echo "Missing or invalid QA screenshot: $OUTPUT_DIR/$name" >&2
             missing=1
@@ -231,7 +240,10 @@ mkdir -p "$OUTPUT_DIR"
 rm -f \
     "$OUTPUT_DIR"/panel.png "$OUTPUT_DIR"/library.png "$OUTPUT_DIR"/settings.png \
     "$OUTPUT_DIR"/panel-default.png "$OUTPUT_DIR"/panel-min.png \
-    "$OUTPUT_DIR"/settings-general.png "$OUTPUT_DIR"/settings-backup.png "$OUTPUT_DIR"/settings-about.png
+    "$OUTPUT_DIR"/settings-general.png "$OUTPUT_DIR"/settings-backup.png "$OUTPUT_DIR"/settings-about.png \
+    "$OUTPUT_DIR"/panel-dark.png "$OUTPUT_DIR"/panel-light.png \
+    "$OUTPUT_DIR"/library-dark.png "$OUTPUT_DIR"/library-light.png \
+    "$OUTPUT_DIR"/settings-dark.png "$OUTPUT_DIR"/settings-light.png
 # Legacy per-mode files above are cleaned so stale artifacts don't linger.
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
@@ -243,19 +255,26 @@ seed_sample_data
 
 # Unified default panel size (matches Constants.panelContentSize = 780x440).
 set_panel_size 780 440
-capture_window "$OUTPUT_DIR/panel.png" 740 400 \
-    PROMPTPANEL_QA_OPEN_PANEL_ON_LAUNCH=1 \
-    PROMPTPANEL_QA_OPEN_PANEL_DELAY_MS=700
 
-capture_window "$OUTPUT_DIR/library.png" 1000 660 \
-    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
-    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
-    PROMPTPANEL_QA_MAIN_WINDOW_TAB=library
+# Capture a full set (panel / library / settings) for each theme so the QA
+# folder mirrors the design-baseline dark + light variants 1:1.
+for theme in dark light; do
+    set_app_theme "$theme"
 
-capture_window "$OUTPUT_DIR/settings.png" 1000 660 \
-    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
-    PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
-    PROMPTPANEL_QA_MAIN_WINDOW_TAB=settings
+    capture_window "$OUTPUT_DIR/panel-$theme.png" 740 400 \
+        PROMPTPANEL_QA_OPEN_PANEL_ON_LAUNCH=1 \
+        PROMPTPANEL_QA_OPEN_PANEL_DELAY_MS=700
+
+    capture_window "$OUTPUT_DIR/library-$theme.png" 1000 660 \
+        PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
+        PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
+        PROMPTPANEL_QA_MAIN_WINDOW_TAB=library
+
+    capture_window "$OUTPUT_DIR/settings-$theme.png" 1000 660 \
+        PROMPTPANEL_QA_OPEN_MAIN_WINDOW_ON_LAUNCH=1 \
+        PROMPTPANEL_QA_OPEN_MAIN_WINDOW_DELAY_MS=500 \
+        PROMPTPANEL_QA_MAIN_WINDOW_TAB=settings
+done
 
 assert_capture_set
 

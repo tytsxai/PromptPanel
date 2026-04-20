@@ -121,7 +121,7 @@ struct LibraryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.white.opacity(0.04))
+                            .fill(Constants.VisualStyle.tintSubtle)
                     )
                 }
                 .buttonStyle(.plain)
@@ -191,7 +191,7 @@ struct LibraryView: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+                .fill(Constants.VisualStyle.tintSubtle)
         )
     }
 
@@ -459,7 +459,7 @@ private struct ProjectRow: View {
             .frame(height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isActive ? Color.white.opacity(0.06) : Color.clear)
+                    .fill(isActive ? Constants.VisualStyle.tintMedium : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -532,7 +532,7 @@ private struct EntryListRow: View {
                     .fill(isSelected ? Constants.VisualStyle.accent : Color.clear)
                     .frame(width: 2)
             }
-            .background(isSelected ? Color.white.opacity(0.04) : Color.clear)
+            .background(isSelected ? Constants.VisualStyle.tintSubtle : Color.clear)
         }
         .buttonStyle(.plain)
     }
@@ -631,7 +631,7 @@ private struct PreviewPane: View {
                 .padding(.vertical, 2)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(Constants.VisualStyle.tintMedium)
                 )
 
                 if entry.isPinned {
@@ -725,7 +725,7 @@ private struct PreviewPane: View {
                                 .padding(.vertical, 1)
                                 .background(
                                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Color.white.opacity(0.05))
+                                        .fill(Constants.VisualStyle.tintMedium)
                                 )
                         }
                     }
@@ -776,7 +776,7 @@ struct TagChipsInline: View {
                     .padding(.vertical, 1)
                     .background(
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(Color.white.opacity(0.04))
+                            .fill(Constants.VisualStyle.tintSubtle)
                     )
             }
             if rest > 0 {

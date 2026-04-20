@@ -1936,7 +1936,7 @@ func databaseManagerRecoversFromCorruptedStore() throws {
 }
 
 @Test
-func storageMaintenanceCreatesBackupAndPrunesOldCopies() throws {
+func storageMaintenanceKeepsManualBackupsBeyondAutomaticRetention() throws {
     let databaseManager = try makeDatabaseManager()
     let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
     let maintenanceService = StorageMaintenanceService(
@@ -1945,13 +1945,13 @@ func storageMaintenanceCreatesBackupAndPrunesOldCopies() throws {
         databaseURL: databaseManager.databaseURL
     )
 
-    _ = try maintenanceService.createManualBackup()
-    _ = try maintenanceService.createManualBackup()
-    _ = try maintenanceService.createManualBackup()
+    let backupTarget = Constants.automaticBackupRetentionCount + 2
+    for _ in 0..<backupTarget {
+        _ = try maintenanceService.createManualBackup()
+    }
 
     let snapshot = try maintenanceService.healthSnapshot()
-    #expect(snapshot.backupCount >= 1)
-    #expect(snapshot.backupCount <= Constants.automaticBackupRetentionCount)
+    #expect(snapshot.backupCount == backupTarget)
     #expect(snapshot.latestBackupURL != nil)
 }
 

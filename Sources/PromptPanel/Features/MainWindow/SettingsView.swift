@@ -15,6 +15,7 @@ struct SettingsView: View {
 
                 HStack(alignment: .top, spacing: columnSpacing) {
                     SettingsColumn {
+                        AppearanceSection(viewModel: viewModel)
                         HotkeySection(viewModel: viewModel)
                         PanelBehaviorSection(viewModel: viewModel)
                         PermissionSection(viewModel: viewModel)
@@ -77,7 +78,7 @@ struct SettingsCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.03))
+                .fill(Constants.VisualStyle.tintSubtle)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -219,7 +220,7 @@ struct SettingsPillButton: View {
     private var fillColor: Color {
         switch tone {
         case .primary: return Constants.VisualStyle.accent
-        case .neutral: return Color.white.opacity(0.06)
+        case .neutral: return Constants.VisualStyle.tintMedium
         case .danger: return Color.clear
         }
     }
@@ -234,6 +235,67 @@ struct SettingsPillButton: View {
 }
 
 // MARK: - Left column sections
+
+private struct AppearanceSection: View {
+    @ObservedObject var viewModel: MainWindowViewModel
+
+    var body: some View {
+        SettingsCard("外观") {
+            SettingsRow(
+                label: "主题",
+                hint: "跟随系统会根据 macOS 当前外观自动切换；选择浅色或深色强制使用该主题。"
+            ) {
+                ThemeSegmentedPicker(selection: Binding(
+                    get: { viewModel.appTheme },
+                    set: { viewModel.setAppTheme($0) }
+                ))
+            }
+        }
+    }
+}
+
+private struct ThemeSegmentedPicker: View {
+    @Binding var selection: AppTheme
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(AppTheme.allCases) { theme in
+                option(for: theme)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Constants.VisualStyle.tintSubtle)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Constants.VisualStyle.border, lineWidth: 0.5)
+        )
+    }
+
+    private func option(for theme: AppTheme) -> some View {
+        let isActive = selection == theme
+        return Button {
+            selection = theme
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: theme.systemImageName)
+                    .font(.system(size: 11, weight: .medium))
+                Text(theme.title)
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .foregroundStyle(isActive ? Constants.VisualStyle.text : Constants.VisualStyle.textTertiary)
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 private struct HotkeySection: View {
     @ObservedObject var viewModel: MainWindowViewModel
@@ -377,8 +439,11 @@ private struct OperationOverviewSection: View {
                 SettingsRow(label: "数据大小", dense: true) {
                     valueText(ByteCountFormatter.string(fromByteCount: snapshot.databaseSizeBytes, countStyle: .file))
                 }
-                SettingsRow(label: "备份数量", dense: true) {
-                    valueText("\(snapshot.backupCount) / \(Constants.automaticBackupRetentionCount)")
+                SettingsRow(label: "备份文件", dense: true) {
+                    valueText("\(snapshot.backupCount)")
+                }
+                SettingsRow(label: "启动备份保留", dense: true) {
+                    valueText("最近 \(Constants.automaticBackupRetentionCount) 份")
                 }
                 SettingsRow(label: "最近备份", dense: true) {
                     valueText(latestBackupSummary(snapshot.latestBackupURL))
@@ -546,7 +611,7 @@ private struct DataLocationSection: View {
                     pathRow(title: "恢复隔离", value: snapshot.recoveryDirectoryURL.path)
                     pathRow(title: "日志目录", value: snapshot.logsDirectoryURL.path)
                     if let url = snapshot.latestBackupURL {
-                        pathRow(title: "最近备份文件", value: url.lastPathComponent)
+                        pathRow(title: "最近备份路径", value: url.path)
                     }
                 }
             } else {
@@ -574,7 +639,7 @@ private struct DataLocationSection: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(Color.white.opacity(0.03))
+                            .fill(Constants.VisualStyle.tintSubtle)
                     )
                 Button {
                     copyPath(value)
@@ -660,7 +725,7 @@ private struct ExecutionLogRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.white.opacity(0.035))
+                .fill(Constants.VisualStyle.tintSubtle)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -713,6 +778,6 @@ private struct ExecutionLogRow: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
-        .background(Capsule().fill(Color.white.opacity(0.04)))
+        .background(Capsule().fill(Constants.VisualStyle.tintSubtle))
     }
 }

@@ -28,12 +28,6 @@ final class MainWindowViewModel: ObservableObject {
         }
     }
 
-    enum SettingsSection: Hashable {
-        case general
-        case backup
-        case about
-    }
-
     struct ProjectDraft: Identifiable {
         let id: String
         let existingProject: Project?
@@ -127,8 +121,7 @@ final class MainWindowViewModel: ObservableObject {
     @Published var isPanelPinned: Bool = false
     @Published var panelShowFooter: Bool = true
     @Published var panelCompactRows: Bool = false
-    @Published var settingsSection: SettingsSection = .general
-
+    @Published var appTheme: AppTheme = .system
     private let appState: AppState
     private let projectRepository: ProjectRepository
     private let entryRepository: EntryRepository
@@ -343,6 +336,19 @@ final class MainWindowViewModel: ObservableObject {
         isPanelPinned = appState.isPanelPinned
         panelShowFooter = appState.panelShowFooter
         panelCompactRows = appState.panelCompactRows
+        appTheme = appState.appTheme
+    }
+
+    func setAppTheme(_ theme: AppTheme) {
+        do {
+            try settingsRepository.setAppTheme(theme)
+            appState.appTheme = theme
+            appTheme = theme
+        } catch {
+            PPLogger.app.error("Failed to persist app theme: \(error.localizedDescription)")
+            appTheme = appState.appTheme
+            bannerMessage = "保存外观失败，请重试。"
+        }
     }
 
     func setPanelShowFooter(_ isVisible: Bool) {
@@ -688,6 +694,13 @@ final class MainWindowViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] value in
                 self?.panelCompactRows = value
+            }
+            .store(in: &cancellables)
+
+        appState.$appTheme
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                self?.appTheme = value
             }
             .store(in: &cancellables)
 

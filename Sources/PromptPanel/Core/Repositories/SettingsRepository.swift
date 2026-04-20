@@ -108,12 +108,14 @@ final class SettingsRepository: @unchecked Sendable {
         PPLogger.panel.info("Panel compact rows set to: \(isCompact)")
     }
 
-    func isClosePanelAfterExecute() throws -> Bool {
-        try getBool(Constants.SettingsKey.closePanelAfterExecute, default: true)
+    // MARK: - Theme
+
+    func getAppTheme() throws -> AppTheme {
+        AppTheme.resolve(try get(Constants.SettingsKey.appTheme))
     }
 
-    func setClosePanelAfterExecute(_ value: Bool) throws {
-        try setBool(Constants.SettingsKey.closePanelAfterExecute, value: value)
-        PPLogger.panel.info("Close panel after execute set to: \(value)")
+    func setAppTheme(_ theme: AppTheme) throws {
+        try set(Constants.SettingsKey.appTheme, value: theme.rawValue)
+        PPLogger.app.info("App theme set to: \(theme.rawValue)")
     }
 }

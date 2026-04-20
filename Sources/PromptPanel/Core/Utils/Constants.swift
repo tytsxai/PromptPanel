@@ -8,32 +8,103 @@ enum Constants {
     private static let logsOverrideEnv = "PROMPTPANEL_LOGS_DIR"
 
     // MARK: - Visual system (PromptPanel front-end baseline)
+    //
+    // All colors are *dynamic*: they resolve at render time via
+    // `NSColor(name:dynamicProvider:)`, so switching `.preferredColorScheme`
+    // (or the system appearance) automatically re-renders every view without
+    // any explicit bridging.
+    //
+    // Naming contract:
+    //   - `bg / surface / surfaceRaised / surfaceHover / surfaceActive / sidebar`
+    //     are concrete surface colors (do NOT flip sign).
+    //   - `tintSubtle / tintMedium / tintStrong` are overlay tints that flip
+    //     sign between themes (white in dark, black in light). Use these
+    //     instead of hardcoded `Color.white.opacity(x)` / `Color.black.opacity(x)`.
+    //   - `border / borderStrong / divider` are hairline dividers; they also
+    //     flip sign so contrast stays legible.
+    //   - `text / textSecondary / textTertiary / textQuaternary` are the
+    //     text hierarchy; secondary/tertiary/quaternary get *more* contrast
+    //     in light mode because light backgrounds need it.
+    //   - `accent*`, `success*`, `warn*`, `danger*` are semantic colors; the
+    //     solid tone is re-tuned for light mode so it stays readable, and the
+    //     `*Dim` fill gets slightly more opacity so a light fill is visible.
     enum VisualStyle {
-        static let bg = Color(red: 0x0e / 255.0, green: 0x0f / 255.0, blue: 0x11 / 255.0)
-        static let surface = Color(red: 0x17 / 255.0, green: 0x18 / 255.0, blue: 0x1b / 255.0)
-        static let surfaceRaised = Color(red: 0x1e / 255.0, green: 0x1f / 255.0, blue: 0x23 / 255.0)
-        static let surfaceHover = Color(red: 0x24 / 255.0, green: 0x26 / 255.0, blue: 0x2b / 255.0)
-        static let surfaceActive = Color(red: 0x2b / 255.0, green: 0x2e / 255.0, blue: 0x34 / 255.0)
-        static let sidebar = Color(red: 0x14 / 255.0, green: 0x15 / 255.0, blue: 0x18 / 255.0)
-        static let border = Color.white.opacity(0.06)
-        static let borderStrong = Color.white.opacity(0.10)
-        static let divider = Color.white.opacity(0.04)
+        // Surfaces
+        static let bg              = dynamicColor(dark: 0x0e0f11, light: 0xf4f5f7)
+        static let surface         = dynamicColor(dark: 0x17181b, light: 0xffffff)
+        static let surfaceRaised   = dynamicColor(dark: 0x1e1f23, light: 0xf6f7f9)
+        static let surfaceHover    = dynamicColor(dark: 0x24262b, light: 0xeceff3)
+        static let surfaceActive   = dynamicColor(dark: 0x2b2e34, light: 0xe3e6ec)
+        static let sidebar         = dynamicColor(dark: 0x141518, light: 0xeef0f4)
 
-        static let text = Color(red: 0xe8 / 255.0, green: 0xe9 / 255.0, blue: 0xec / 255.0)
-        static let textSecondary = Color(red: 0x9a / 255.0, green: 0x9e / 255.0, blue: 0xa6 / 255.0)
-        static let textTertiary = Color(red: 0x6b / 255.0, green: 0x6f / 255.0, blue: 0x77 / 255.0)
-        static let textQuaternary = Color(red: 0x4a / 255.0, green: 0x4d / 255.0, blue: 0x54 / 255.0)
+        // Dividers & borders (sign-flipping hairlines)
+        static let border          = invertingTint(darkAlpha: 0.06, lightAlpha: 0.10)
+        static let borderStrong    = invertingTint(darkAlpha: 0.10, lightAlpha: 0.14)
+        static let divider         = invertingTint(darkAlpha: 0.04, lightAlpha: 0.07)
 
-        static let accent = Color(red: 0x7c / 255.0, green: 0x8c / 255.0, blue: 0xf8 / 255.0)
-        static let accentDim = Color(red: 0x7c / 255.0, green: 0x8c / 255.0, blue: 0xf8 / 255.0).opacity(0.14)
-        static let accentBorder = Color(red: 0x7c / 255.0, green: 0x8c / 255.0, blue: 0xf8 / 255.0).opacity(0.35)
+        // Text hierarchy
+        static let text            = dynamicColor(dark: 0xe8e9ec, light: 0x1a1c20)
+        static let textSecondary   = dynamicColor(dark: 0x9a9ea6, light: 0x4e525b)
+        static let textTertiary    = dynamicColor(dark: 0x6b6f77, light: 0x7a7e87)
+        static let textQuaternary  = dynamicColor(dark: 0x4a4d54, light: 0xadb1b9)
 
-        static let success = Color(red: 0x5f / 255.0, green: 0xb3 / 255.0, blue: 0x7a / 255.0)
-        static let successDim = Color(red: 0x5f / 255.0, green: 0xb3 / 255.0, blue: 0x7a / 255.0).opacity(0.12)
-        static let warn = Color(red: 0xd4 / 255.0, green: 0xa3 / 255.0, blue: 0x5a / 255.0)
-        static let warnDim = Color(red: 0xd4 / 255.0, green: 0xa3 / 255.0, blue: 0x5a / 255.0).opacity(0.12)
-        static let danger = Color(red: 0xd4 / 255.0, green: 0x70 / 255.0, blue: 0x70 / 255.0)
-        static let dangerDim = Color(red: 0xd4 / 255.0, green: 0x70 / 255.0, blue: 0x70 / 255.0).opacity(0.12)
+        // Accent (indigo 7c8cf8 — slightly deeper in light mode for contrast)
+        static let accent          = dynamicColor(dark: 0x7c8cf8, light: 0x5667e6)
+        static let accentDim       = semanticFill(dark: 0x7c8cf8, darkAlpha: 0.14, light: 0x5667e6, lightAlpha: 0.12)
+        static let accentBorder    = semanticFill(dark: 0x7c8cf8, darkAlpha: 0.35, light: 0x5667e6, lightAlpha: 0.32)
+
+        // Semantic (success / warn / danger)
+        static let success         = dynamicColor(dark: 0x5fb37a, light: 0x2f8a4f)
+        static let successDim      = semanticFill(dark: 0x5fb37a, darkAlpha: 0.12, light: 0x2f8a4f, lightAlpha: 0.14)
+        static let warn            = dynamicColor(dark: 0xd4a35a, light: 0x9b6f1a)
+        static let warnDim         = semanticFill(dark: 0xd4a35a, darkAlpha: 0.12, light: 0x9b6f1a, lightAlpha: 0.14)
+        static let danger          = dynamicColor(dark: 0xd47070, light: 0xb63030)
+        static let dangerDim       = semanticFill(dark: 0xd47070, darkAlpha: 0.12, light: 0xb63030, lightAlpha: 0.12)
+
+        // Overlay tints — flip sign between themes. Use instead of
+        // raw `Color.white.opacity(x)` / `Color.black.opacity(x)`.
+        static let tintSubtle      = invertingTint(darkAlpha: 0.04, lightAlpha: 0.035)
+        static let tintMedium      = invertingTint(darkAlpha: 0.06, lightAlpha: 0.05)
+        static let tintStrong      = invertingTint(darkAlpha: 0.10, lightAlpha: 0.08)
+
+        // Convenience: dark "scrim" used for panel footers — always darker
+        // than the surface (black-tinted even in light mode).
+        static let scrim           = semanticFill(dark: 0x000000, darkAlpha: 0.20, light: 0x000000, lightAlpha: 0.05)
+
+        // MARK: - Dynamic color helpers
+
+        /// Resolves `dark` / `light` hex values based on the current appearance.
+        private static func dynamicColor(dark: UInt32, light: UInt32) -> Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                nsColor(hex: appearance.isDark ? dark : light)
+            })
+        }
+
+        /// Hairline tint that flips sign: white overlay in dark mode, black in
+        /// light mode. Used for borders, dividers, and subtle fills.
+        private static func invertingTint(darkAlpha: CGFloat, lightAlpha: CGFloat) -> Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? NSColor(srgbRed: 1, green: 1, blue: 1, alpha: darkAlpha)
+                    : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: lightAlpha)
+            })
+        }
+
+        /// Semantic fill with per-mode hue + alpha.
+        private static func semanticFill(dark: UInt32, darkAlpha: CGFloat, light: UInt32, lightAlpha: CGFloat) -> Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? nsColor(hex: dark, alpha: darkAlpha)
+                    : nsColor(hex: light, alpha: lightAlpha)
+            })
+        }
+
+        private static func nsColor(hex: UInt32, alpha: CGFloat = 1) -> NSColor {
+            let r = CGFloat((hex >> 16) & 0xff) / 255
+            let g = CGFloat((hex >> 8) & 0xff) / 255
+            let b = CGFloat(hex & 0xff) / 255
+            return NSColor(srgbRed: r, green: g, blue: b, alpha: alpha)
+        }
     }
 
     // MARK: - Application Identity
@@ -93,7 +164,7 @@ enum Constants {
         static let panelContentHeight = "panel_content_height"
         static let panelShowFooter = "panel_show_footer"
         static let panelCompactRows = "panel_compact_rows"
-        static let closePanelAfterExecute = "close_panel_after_execute"
+        static let appTheme = "app_theme"
     }
 
     // MARK: - Entry Types
@@ -208,5 +279,14 @@ enum Constants {
             return nil
         }
         return URL(fileURLWithPath: rawValue, isDirectory: true)
+    }
+}
+
+extension NSAppearance {
+    /// True when the appearance resolves to a dark variant. Used by the
+    /// dynamic color providers in `Constants.VisualStyle`.
+    var isDark: Bool {
+        bestMatch(from: [.aqua, .vibrantLight, .darkAqua, .vibrantDark]) == .darkAqua
+            || bestMatch(from: [.aqua, .vibrantLight, .darkAqua, .vibrantDark]) == .vibrantDark
     }
 }

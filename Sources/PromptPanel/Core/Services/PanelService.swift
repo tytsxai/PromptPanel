@@ -11,6 +11,7 @@ final class PanelService {
     }
 
     private var panel: NSPanel?
+    private var currentAppearance: NSAppearance?
     private var panelDelegate: PanelDelegate?
     private var targetApplication: NSRunningApplication?
     private var deactivateCloseGraceDeadline: Date?
@@ -119,6 +120,13 @@ final class PanelService {
         }
     }
 
+    /// Override the panel's NSAppearance so its chrome tracks the user's
+    /// theme choice. Passing `nil` falls back to the system appearance.
+    func setAppearance(_ appearance: NSAppearance?) {
+        currentAppearance = appearance
+        panel?.appearance = appearance
+    }
+
     /// Create the NSPanel with proper configuration.
     private func createPanel() {
         let windowSize = Constants.panelWindowContentSize(for: appState.panelContentSize)
@@ -168,6 +176,7 @@ final class PanelService {
 
         self.panel = panel
         self.panelDelegate = delegate
+        panel.appearance = currentAppearance
         PPLogger.panel.info("Panel created")
     }
 

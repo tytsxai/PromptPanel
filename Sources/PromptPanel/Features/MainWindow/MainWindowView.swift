@@ -24,6 +24,7 @@ struct MainWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .preferredColorScheme(viewModel.appTheme.preferredColorScheme)
         .frame(
             minWidth: Constants.MainWindowLayout.minContentSize.width,
             minHeight: Constants.MainWindowLayout.minContentSize.height
@@ -107,7 +108,7 @@ struct MainWindowView: View {
         .frame(height: 36)
         .background(
             Rectangle()
-                .fill(Color.black.opacity(0.2))
+                .fill(Constants.VisualStyle.scrim)
                 .overlay(
                     Rectangle()
                         .fill(Constants.VisualStyle.divider)
@@ -153,7 +154,7 @@ struct MainWindowView: View {
                 .padding(.vertical, 5)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isActive ? Color.white.opacity(0.08) : Color.clear)
+                        .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
                 )
         }
         .buttonStyle(.plain)

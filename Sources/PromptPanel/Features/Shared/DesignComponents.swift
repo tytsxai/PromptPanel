@@ -19,11 +19,11 @@ struct KbdLabel: View {
             .frame(minWidth: 18, minHeight: 18)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
+                    .fill(Constants.VisualStyle.tintMedium)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    .strokeBorder(Constants.VisualStyle.tintStrong, lineWidth: 0.5)
             )
     }
 }
@@ -178,7 +178,7 @@ struct GhostActionButton: View {
             .frame(height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(Constants.VisualStyle.tintMedium)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)

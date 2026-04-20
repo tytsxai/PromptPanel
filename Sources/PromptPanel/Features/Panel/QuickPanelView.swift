@@ -11,8 +11,8 @@ struct QuickPanelView: View {
             header
                 .overlay(dividerBottom, alignment: .bottom)
 
-            if let statusMessage = viewModel.statusMessage, viewModel.statusTone == .warning {
-                statusBanner(statusMessage)
+            if let statusMessage = viewModel.statusMessage {
+                statusBanner(statusMessage, tone: viewModel.statusTone)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .overlay(dividerBottom, alignment: .bottom)
@@ -27,6 +27,7 @@ struct QuickPanelView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(panelSurface)
+        .preferredColorScheme(appState.appTheme.preferredColorScheme)
     }
 
     private var dividerBottom: some View {
@@ -149,7 +150,7 @@ struct QuickPanelView: View {
             .frame(height: 22)
             .background(
                 RoundedRectangle(cornerRadius: Design.pillCornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
+                    .fill(Constants.VisualStyle.tintMedium)
             )
         }
         .menuStyle(.borderlessButton)
@@ -259,44 +260,81 @@ struct QuickPanelView: View {
 
     // MARK: - Status banner
 
-    private func statusBanner(_ message: String) -> some View {
+    private func statusBanner(_ message: String, tone: QuickPanelViewModel.StatusTone) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: statusIcon(for: tone))
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Constants.VisualStyle.warn)
-            Text(displayStatusMessage(message))
+                .foregroundStyle(statusAccent(for: tone))
+            Text(displayStatusMessage(message, tone: tone))
                 .font(.system(size: 11.5))
                 .foregroundStyle(Constants.VisualStyle.textSecondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if viewModel.statusTone == .warning {
+            if tone == .warning {
                 Button("前往授权") {
                     viewModel.openAccessibilitySettings()
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(Constants.VisualStyle.warn)
+                .foregroundStyle(statusAccent(for: tone))
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Constants.VisualStyle.warnDim)
+                .fill(statusBackground(for: tone))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Constants.VisualStyle.warn.opacity(0.25), lineWidth: 0.5)
+                .strokeBorder(statusBorder(for: tone), lineWidth: 0.5)
         )
     }
 
-    private func displayStatusMessage(_ message: String) -> String {
-        switch viewModel.statusTone {
+    private func displayStatusMessage(_ message: String, tone: QuickPanelViewModel.StatusTone) -> String {
+        switch tone {
         case .warning:
             return "辅助功能未授权 · 当前为仅复制模式"
         case .info, .error:
             return message
         }
+    }
+
+    private func statusIcon(for tone: QuickPanelViewModel.StatusTone) -> String {
+        switch tone {
+        case .info:
+            return "info.circle.fill"
+        case .warning:
+            return "exclamationmark.triangle.fill"
+        case .error:
+            return "exclamationmark.octagon.fill"
+        }
+    }
+
+    private func statusAccent(for tone: QuickPanelViewModel.StatusTone) -> Color {
+        switch tone {
+        case .info:
+            return Constants.VisualStyle.accent
+        case .warning:
+            return Constants.VisualStyle.warn
+        case .error:
+            return Constants.VisualStyle.danger
+        }
+    }
+
+    private func statusBackground(for tone: QuickPanelViewModel.StatusTone) -> Color {
+        switch tone {
+        case .info:
+            return Constants.VisualStyle.accentDim
+        case .warning:
+            return Constants.VisualStyle.warnDim
+        case .error:
+            return Constants.VisualStyle.dangerDim
+        }
+    }
+
+    private func statusBorder(for tone: QuickPanelViewModel.StatusTone) -> Color {
+        statusAccent(for: tone).opacity(0.25)
     }
 
     // MARK: - Footer
@@ -315,7 +353,7 @@ struct QuickPanelView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 28)
-        .background(Color.black.opacity(0.15))
+        .background(Constants.VisualStyle.scrim)
     }
 
     private func hint(keys: String, label: String) -> some View {
@@ -398,7 +436,7 @@ private struct PanelRow: View {
                             .padding(.vertical, 1)
                             .background(
                                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                    .fill(Color.white.opacity(0.06))
+                                    .fill(Constants.VisualStyle.tintMedium)
                             )
                     }
                     Text(type.displayName)
