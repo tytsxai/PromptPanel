@@ -61,9 +61,15 @@ if [[ -z "$DEFAULT_PROJECT_COUNT" || "$DEFAULT_PROJECT_COUNT" -lt 1 ]]; then
     exit 1
 fi
 
-CURRENT_PROJECT_SETTING_COUNT="$(sqlite3 "$BACKUP_SOURCE" "SELECT COUNT(*) FROM app_settings WHERE key = 'current_project_id';" 2>/dev/null || true)"
-if [[ -z "$CURRENT_PROJECT_SETTING_COUNT" || "$CURRENT_PROJECT_SETTING_COUNT" -lt 1 ]]; then
-    echo "Backup schema validation failed: current_project_id setting is missing." >&2
+CURRENT_PROJECT_REFERENCE_COUNT="$(sqlite3 "$BACKUP_SOURCE" "
+    SELECT COUNT(*)
+    FROM app_settings
+    INNER JOIN projects ON projects.id = app_settings.value
+    WHERE app_settings.key = 'current_project_id'
+      AND TRIM(COALESCE(app_settings.value, '')) != '';
+" 2>/dev/null || true)"
+if [[ -z "$CURRENT_PROJECT_REFERENCE_COUNT" || "$CURRENT_PROJECT_REFERENCE_COUNT" -lt 1 ]]; then
+    echo "Backup schema validation failed: current_project_id is missing, empty, or points to a non-existent project." >&2
     exit 1
 fi
 

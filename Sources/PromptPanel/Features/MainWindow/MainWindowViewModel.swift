@@ -723,7 +723,13 @@ final class MainWindowViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.scheduleEntriesRefresh(delayMs: 0)
                 self?.refreshProjectEntryCounts()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .executionLogsDidChange)
+            .sink { [weak self] _ in
                 self?.refreshLogs()
+                self?.refreshOperationalStatus()
             }
             .store(in: &cancellables)
 

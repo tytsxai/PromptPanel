@@ -10,6 +10,7 @@ enum Migrations {
         registerV2ExecutionLogDiagnostics(migrator: &migrator)
         registerV3ExecutionLogInteractionDiagnostics(migrator: &migrator)
         registerV4EntryTags(migrator: &migrator)
+        registerV5DropUnusedEntryTagsIndex(migrator: &migrator)
     }
 
     // MARK: - V1: Initial Schema
@@ -145,7 +146,13 @@ enum Migrations {
                 // Empty string ("[]") is treated the same as NULL / no tags.
                 t.add(column: "tags", .text).notNull().defaults(to: "[]")
             }
-            try db.create(indexOn: "entries", columns: ["tags"])
+        }
+    }
+
+    private static func registerV5DropUnusedEntryTagsIndex(migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("v5_drop_unused_entry_tags_index") { db in
+            PPLogger.database.info("Running migration: v5_drop_unused_entry_tags_index")
+            try db.execute(sql: "DROP INDEX IF EXISTS index_entries_on_tags")
         }
     }
 }

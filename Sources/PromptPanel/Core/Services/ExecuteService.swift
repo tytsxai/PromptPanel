@@ -300,6 +300,7 @@ final class ExecuteService {
         )
         do {
             try logRepository.record(log)
+            NotificationCenter.default.post(name: .executionLogsDidChange, object: nil)
             if let totalDurationMs {
                 warnIfExecutionSlow(durationMs: totalDurationMs, result: result, failureReason: failureReason)
             }

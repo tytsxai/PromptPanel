@@ -56,8 +56,56 @@ enum AppLaunchCoordinator {
     }
 }
 
+struct CurrentProjectSelectionResolution: Equatable {
+    let projectId: String?
+    let needsPersistence: Bool
+    let repairReason: String?
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    static func resolveCurrentProjectSelection(
+        persistedCurrentProjectId: String?,
+        defaultProjectId: String?,
+        currentProjectExists: (String) throws -> Bool
+    ) rethrows -> CurrentProjectSelectionResolution {
+        let normalizedCurrentProjectId = persistedCurrentProjectId?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let normalizedCurrentProjectId,
+           !normalizedCurrentProjectId.isEmpty,
+           try currentProjectExists(normalizedCurrentProjectId) {
+            let needsPersistence = normalizedCurrentProjectId != persistedCurrentProjectId
+            return CurrentProjectSelectionResolution(
+                projectId: normalizedCurrentProjectId,
+                needsPersistence: needsPersistence,
+                repairReason: needsPersistence ? "Normalized current project selection before loading persisted state." : nil
+            )
+        }
+
+        let normalizedDefaultProjectId = defaultProjectId?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let normalizedDefaultProjectId, !normalizedDefaultProjectId.isEmpty else {
+            return CurrentProjectSelectionResolution(
+                projectId: nil,
+                needsPersistence: false,
+                repairReason: nil
+            )
+        }
+
+        let repairReason: String
+        if let normalizedCurrentProjectId, !normalizedCurrentProjectId.isEmpty {
+            repairReason = "Current project \(normalizedCurrentProjectId) no longer exists; falling back to default project \(normalizedDefaultProjectId)."
+        } else {
+            repairReason = "Current project selection is missing; falling back to default project \(normalizedDefaultProjectId)."
+        }
+
+        return CurrentProjectSelectionResolution(
+            projectId: normalizedDefaultProjectId,
+            needsPersistence: normalizedDefaultProjectId != persistedCurrentProjectId,
+            repairReason: repairReason
+        )
+    }
+
     private var mainWindow: NSWindow?
     private let launchMaintenanceQueue = DispatchQueue(label: "PromptPanel.launch-maintenance", qos: .utility)
 
@@ -178,8 +226,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             databaseURL: databaseManager.databaseURL
         )
 
-        let currentProjectId = try settingsRepository.getCurrentProjectId()
         let defaultProject = try projectRepository.fetchDefault()
+        let currentProjectResolution = try Self.resolveCurrentProjectSelection(
+            persistedCurrentProjectId: try settingsRepository.getCurrentProjectId(),
+            defaultProjectId: defaultProject?.id,
+            currentProjectExists: { [projectRepository] projectId in
+                try projectRepository.fetchById(projectId) != nil
+            }
+        )
+        if currentProjectResolution.needsPersistence, let repairedProjectId = currentProjectResolution.projectId {
+            if let repairReason = currentProjectResolution.repairReason {
+                PPLogger.project.warning("Repairing current project selection on launch: \(repairReason)")
+            }
+            try settingsRepository.setCurrentProjectId(repairedProjectId)
+        }
         let isPanelPinned = try settingsRepository.isPanelPinned()
         let panelContentSize = try settingsRepository.getPanelContentSize()
         let panelShowFooter = try settingsRepository.isPanelFooterVisible()
@@ -187,7 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appTheme = try settingsRepository.getAppTheme()
 
         appState.loadPersistedState(
-            currentProjectId: currentProjectId,
+            currentProjectId: currentProjectResolution.projectId,
             defaultProjectId: defaultProject?.id,
             isPanelPinned: isPanelPinned,
             panelContentSize: panelContentSize,

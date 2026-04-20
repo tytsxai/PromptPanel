@@ -24,6 +24,35 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(try settingsRepository.getCurrentProjectId(), defaultProject.id)
     }
 
+    func testResolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() throws {
+        let defaultProjectId = UUID().uuidString
+
+        let resolution = try AppDelegate.resolveCurrentProjectSelection(
+            persistedCurrentProjectId: "missing-project",
+            defaultProjectId: defaultProjectId,
+            currentProjectExists: { $0 == defaultProjectId }
+        )
+
+        XCTAssertEqual(resolution.projectId, defaultProjectId)
+        XCTAssertTrue(resolution.needsPersistence)
+        XCTAssertNotNil(resolution.repairReason)
+    }
+
+    func testResolveCurrentProjectSelectionKeepsValidPersistedProject() throws {
+        let currentProjectId = UUID().uuidString
+        let defaultProjectId = UUID().uuidString
+
+        let resolution = try AppDelegate.resolveCurrentProjectSelection(
+            persistedCurrentProjectId: currentProjectId,
+            defaultProjectId: defaultProjectId,
+            currentProjectExists: { $0 == currentProjectId }
+        )
+
+        XCTAssertEqual(resolution.projectId, currentProjectId)
+        XCTAssertFalse(resolution.needsPersistence)
+        XCTAssertNil(resolution.repairReason)
+    }
+
     func testPanelPinnedSettingRoundTrips() throws {
         let databaseManager = try makeDatabaseManager()
         let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
@@ -1025,6 +1054,63 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(afterSnapshot.latestBackupURL?.lastPathComponent, manualBackupURL.lastPathComponent)
     }
 
+    func testFreshDatabaseDoesNotCreateUnusedTagsIndex() throws {
+        let databaseManager = try makeDatabaseManager()
+        let indexNames = try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(db, sql: "PRAGMA index_list('entries')")
+                .compactMap { row in row["name"] as String? }
+        }
+
+        XCTAssertFalse(indexNames.contains("index_entries_on_tags"))
+    }
+
+    func testMigrationsDropLegacyTagsIndex() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("sqlite")
+
+        let queue = try DatabaseQueue(path: databaseURL.path)
+        try queue.write { db in
+            try db.execute(sql: """
+                CREATE TABLE entries (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    project_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    is_pinned INTEGER NOT NULL,
+                    sort_order INTEGER NOT NULL,
+                    use_count INTEGER NOT NULL,
+                    last_used_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    tags TEXT NOT NULL DEFAULT '[]'
+                )
+                """)
+            try db.execute(sql: "CREATE INDEX index_entries_on_tags ON entries(tags)")
+            try db.execute(sql: "CREATE TABLE grdb_migrations (identifier TEXT PRIMARY KEY NOT NULL)")
+            for identifier in [
+                "v1_create_tables",
+                "v2_execution_log_diagnostics",
+                "v3_execution_log_interaction_diagnostics",
+                "v4_entry_tags"
+            ] {
+                try db.execute(
+                    sql: "INSERT INTO grdb_migrations(identifier) VALUES (?)",
+                    arguments: [identifier]
+                )
+            }
+        }
+
+        let databaseManager = try DatabaseManager(url: databaseURL)
+        let indexNames = try databaseManager.dbQueue.read { db in
+            try Row.fetchAll(db, sql: "PRAGMA index_list('entries')")
+                .compactMap { row in row["name"] as String? }
+        }
+
+        XCTAssertFalse(indexNames.contains("index_entries_on_tags"))
+    }
+
     func testLogCleanupRemovesOnlyExpiredEntries() throws {
         let databaseManager = try makeDatabaseManager()
         let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
@@ -1153,6 +1239,37 @@ func databaseSeedsDefaultProjectAndCurrentProject() throws {
     let defaultProject = try #require(projectRepository.fetchDefault())
     #expect(defaultProject.name == Constants.defaultProjectName)
     #expect(try settingsRepository.getCurrentProjectId() == defaultProject.id)
+}
+
+@Test
+func resolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() throws {
+    let defaultProjectId = UUID().uuidString
+
+    let resolution = try AppDelegate.resolveCurrentProjectSelection(
+        persistedCurrentProjectId: "missing-project",
+        defaultProjectId: defaultProjectId,
+        currentProjectExists: { $0 == defaultProjectId }
+    )
+
+    #expect(resolution.projectId == defaultProjectId)
+    #expect(resolution.needsPersistence)
+    #expect(resolution.repairReason != nil)
+}
+
+@Test
+func resolveCurrentProjectSelectionKeepsValidPersistedProject() throws {
+    let currentProjectId = UUID().uuidString
+    let defaultProjectId = UUID().uuidString
+
+    let resolution = try AppDelegate.resolveCurrentProjectSelection(
+        persistedCurrentProjectId: currentProjectId,
+        defaultProjectId: defaultProjectId,
+        currentProjectExists: { $0 == currentProjectId }
+    )
+
+    #expect(resolution.projectId == currentProjectId)
+    #expect(!resolution.needsPersistence)
+    #expect(resolution.repairReason == nil)
 }
 
 @Test
@@ -1973,6 +2090,65 @@ func launchMaintenanceDoesNotCreateExtraBackupAfterRecentManualBackup() throws {
     let afterSnapshot = try maintenanceService.healthSnapshot()
     #expect(afterSnapshot.backupCount == beforeSnapshot.backupCount)
     #expect(afterSnapshot.latestBackupURL?.lastPathComponent == manualBackupURL.lastPathComponent)
+}
+
+@Test
+func freshDatabaseDoesNotCreateUnusedTagsIndex() throws {
+    let databaseManager = try makeDatabaseManager()
+    let indexNames = try databaseManager.dbQueue.read { db in
+        try Row.fetchAll(db, sql: "PRAGMA index_list('entries')")
+            .compactMap { row in row["name"] as String? }
+    }
+
+    #expect(!indexNames.contains("index_entries_on_tags"))
+}
+
+@Test
+func migrationsDropLegacyTagsIndex() throws {
+    let databaseURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("sqlite")
+
+    let queue = try DatabaseQueue(path: databaseURL.path)
+    try queue.write { db in
+        try db.execute(sql: """
+            CREATE TABLE entries (
+                id TEXT PRIMARY KEY NOT NULL,
+                project_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                type TEXT NOT NULL,
+                is_pinned INTEGER NOT NULL,
+                sort_order INTEGER NOT NULL,
+                use_count INTEGER NOT NULL,
+                last_used_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                tags TEXT NOT NULL DEFAULT '[]'
+            )
+            """)
+        try db.execute(sql: "CREATE INDEX index_entries_on_tags ON entries(tags)")
+        try db.execute(sql: "CREATE TABLE grdb_migrations (identifier TEXT PRIMARY KEY NOT NULL)")
+        for identifier in [
+            "v1_create_tables",
+            "v2_execution_log_diagnostics",
+            "v3_execution_log_interaction_diagnostics",
+            "v4_entry_tags"
+        ] {
+            try db.execute(
+                sql: "INSERT INTO grdb_migrations(identifier) VALUES (?)",
+                arguments: [identifier]
+            )
+        }
+    }
+
+    let databaseManager = try DatabaseManager(url: databaseURL)
+    let indexNames = try databaseManager.dbQueue.read { db in
+        try Row.fetchAll(db, sql: "PRAGMA index_list('entries')")
+            .compactMap { row in row["name"] as String? }
+    }
+
+    #expect(!indexNames.contains("index_entries_on_tags"))
 }
 
 @Test
