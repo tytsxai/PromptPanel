@@ -100,15 +100,15 @@ struct MainWindowView: View {
             Spacer(minLength: 0)
 
             Text(Constants.appName)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                 .foregroundStyle(Constants.VisualStyle.textQuaternary)
                 .frame(width: 72, alignment: .trailing)
         }
         .padding(.horizontal, 14)
-        .frame(height: 36)
+        .frame(height: Constants.Layout.headerHeight)
         .background(
             Rectangle()
-                .fill(Constants.VisualStyle.scrim)
+                .fill(Constants.VisualStyle.surface)
                 .overlay(
                     Rectangle()
                         .fill(Constants.VisualStyle.divider)
@@ -151,10 +151,10 @@ struct MainWindowView: View {
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(isActive ? Constants.VisualStyle.text : Constants.VisualStyle.textTertiary)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 5)
+                .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
+                        .fill(isActive ? Constants.VisualStyle.tintMedium : Color.clear)
                 )
         }
         .buttonStyle(.plain)

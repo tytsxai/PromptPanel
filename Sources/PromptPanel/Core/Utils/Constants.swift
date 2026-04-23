@@ -52,6 +52,8 @@ enum Constants {
         static let accent          = dynamicColor(dark: 0x7c8cf8, light: 0x5667e6)
         static let accentDim       = semanticFill(dark: 0x7c8cf8, darkAlpha: 0.14, light: 0x5667e6, lightAlpha: 0.12)
         static let accentBorder    = semanticFill(dark: 0x7c8cf8, darkAlpha: 0.35, light: 0x5667e6, lightAlpha: 0.32)
+        static let infoBannerFill  = dynamicColor(dark: 0x25283b, light: 0xe7ecff)
+        static let infoBannerBorder = dynamicColor(dark: 0x3d467c, light: 0xc4cffc)
 
         // Semantic (success / warn / danger)
         static let success         = dynamicColor(dark: 0x5fb37a, light: 0x2f8a4f)
@@ -105,6 +107,20 @@ enum Constants {
             let b = CGFloat(hex & 0xff) / 255
             return NSColor(srgbRed: r, green: g, blue: b, alpha: alpha)
         }
+    }
+
+    enum Layout {
+        static let sectionSpacing: CGFloat = 14
+        static let sectionInset: CGFloat = 12
+        static let sectionCornerRadius: CGFloat = 9
+        static let compactControlHeight: CGFloat = 24
+        static let regularControlHeight: CGFloat = 28
+        static let compactRowHeight: CGFloat = 30
+        static let regularRowHeight: CGFloat = 34
+        static let headerHeight: CGFloat = 34
+        static let footerHeight: CGFloat = 26
+        static let badgeCornerRadius: CGFloat = 4
+        static let chipCornerRadius: CGFloat = 5
     }
 
     // MARK: - Application Identity

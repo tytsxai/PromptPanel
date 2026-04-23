@@ -71,8 +71,8 @@ struct KeyAwareSearchField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: PromptSearchField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
+        if nsView.stringValue != text || nsView.currentEditor()?.string != text {
+            nsView.setDisplayedText(text)
         }
 
         context.coordinator.onMoveSelection = onMoveSelection
@@ -325,6 +325,12 @@ final class PromptSearchField: NSSearchField {
             applyAppearance(isFocused: false)
         }
         return didResignFirstResponder
+    }
+
+    func setDisplayedText(_ text: String) {
+        stringValue = text
+        currentEditor()?.string = text
+        currentEditor()?.selectedRange = NSRange(location: text.count, length: 0)
     }
 
     private func configureAppearance() {

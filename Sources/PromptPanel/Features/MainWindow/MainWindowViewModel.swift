@@ -437,7 +437,9 @@ final class MainWindowViewModel: ObservableObject {
     func requestAccessibilityPermission() {
         permissionService.requestPermission()
         refreshPermissionState()
-        bannerMessage = permissionService.isAccessibilityGranted ? "辅助功能权限已启用。" : "权限尚未完成，请在系统设置中继续授权。"
+        bannerMessage = permissionService.isAccessibilityGranted
+            ? "辅助功能权限已启用。"
+            : "权限尚未完成，请在系统设置中开启 PromptPanel.app；若列表里同时出现 PromptPanel，请以 PromptPanel.app 为准。"
     }
 
     func openAccessibilitySettings() {

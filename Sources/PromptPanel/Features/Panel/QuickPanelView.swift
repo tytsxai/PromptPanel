@@ -76,6 +76,7 @@ struct QuickPanelView: View {
                     return true
                 }
             )
+            .id(viewModel.focusToken)
             .frame(maxWidth: .infinity)
 
             if viewModel.query.isEmpty == false {
@@ -93,7 +94,7 @@ struct QuickPanelView: View {
             settingsButton
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 
     private var searchPlaceholder: String {
@@ -147,10 +148,14 @@ struct QuickPanelView: View {
                     .foregroundStyle(Constants.VisualStyle.textTertiary)
             }
             .padding(.horizontal, 10)
-            .frame(height: 22)
+            .frame(height: Constants.Layout.compactControlHeight)
             .background(
                 RoundedRectangle(cornerRadius: Design.pillCornerRadius, style: .continuous)
-                    .fill(Constants.VisualStyle.tintMedium)
+                    .fill(Constants.VisualStyle.surfaceRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Design.pillCornerRadius, style: .continuous)
+                    .strokeBorder(Constants.VisualStyle.border, lineWidth: 0.5)
             )
         }
         .menuStyle(.borderlessButton)
@@ -165,7 +170,7 @@ struct QuickPanelView: View {
             Image(systemName: "gearshape")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Constants.VisualStyle.textTertiary)
-                .frame(width: 22, height: 22)
+                .frame(width: Constants.Layout.compactControlHeight, height: Constants.Layout.compactControlHeight)
         }
         .buttonStyle(.plain)
         .help("打开设置")
@@ -279,22 +284,24 @@ struct QuickPanelView: View {
                 .foregroundStyle(statusAccent(for: tone))
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Rectangle()
                 .fill(statusBackground(for: tone))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(statusBorder(for: tone), lineWidth: 0.5)
+            Rectangle()
+                .fill(statusBorder(for: tone))
+                .frame(height: 0.5),
+            alignment: .bottom
         )
     }
 
     private func displayStatusMessage(_ message: String, tone: QuickPanelViewModel.StatusTone) -> String {
         switch tone {
         case .warning:
-            return "辅助功能未授权 · 当前为仅复制模式"
+            return message
         case .info, .error:
             return message
         }
@@ -340,19 +347,19 @@ struct QuickPanelView: View {
     // MARK: - Footer
 
     private var footerHints: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             hint(keys: "↑↓", label: "选择")
-            hint(keys: "⏎", label: "粘贴")
+            hint(keys: "Enter", label: "执行")
+            hint(keys: "Esc", label: "关闭")
             hint(keys: "⌘C", label: "复制")
             hint(keys: "⌘1-9", label: "直达")
-            hint(keys: "Esc", label: "关闭")
             Spacer(minLength: 0)
             Text("\(viewModel.entries.count) 条")
                 .font(.system(size: 10.5, weight: .regular, design: .monospaced))
                 .foregroundStyle(Constants.VisualStyle.textQuaternary)
         }
         .padding(.horizontal, 12)
-        .frame(height: 28)
+        .frame(height: Constants.Layout.footerHeight)
         .background(Constants.VisualStyle.scrim)
     }
 
@@ -366,10 +373,10 @@ struct QuickPanelView: View {
     }
 
     private var panelSurface: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(Constants.VisualStyle.surface)
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(Constants.VisualStyle.borderStrong, lineWidth: 0.5)
             )
     }
@@ -413,6 +420,7 @@ private struct PanelRow: View {
                         }
                     }
                     .layoutPriority(1)
+                    .frame(maxWidth: 220, alignment: .leading)
 
                     Text(previewText)
                         .font(.system(size: 11.5))
@@ -425,31 +433,31 @@ private struct PanelRow: View {
                 HStack(spacing: 8) {
                     if isSelected {
                         Text("\(entry.useCount) 次")
-                            .font(.system(size: 10.5, design: .monospaced))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundStyle(Constants.VisualStyle.textQuaternary)
                     }
                     if showDefaultBadge {
                         Text("通用")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 9.5, weight: .medium))
                             .foregroundStyle(Constants.VisualStyle.textTertiary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(
-                                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                    .fill(Constants.VisualStyle.tintMedium)
+                                RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                                    .fill(Constants.VisualStyle.tintSubtle)
                             )
                     }
                     Text(type.displayName)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 9.5, weight: .medium))
                         .foregroundStyle(isSelected ? Constants.VisualStyle.textSecondary : Constants.VisualStyle.textQuaternary)
                 }
             }
             .padding(.leading, 8)
             .padding(.trailing, 12)
-            .frame(height: isCompact ? 28 : 34)
+            .frame(height: isCompact ? Constants.Layout.compactRowHeight : Constants.Layout.regularRowHeight)
             .background(
                 RoundedRectangle(cornerRadius: Design.rowCornerRadius, style: .continuous)
-                    .fill(isSelected ? Constants.VisualStyle.accentDim : Color.clear)
+                    .fill(isSelected ? Constants.VisualStyle.tintSubtle : Color.clear)
             )
         }
         .buttonStyle(.plain)

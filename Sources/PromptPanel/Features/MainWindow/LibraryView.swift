@@ -7,7 +7,7 @@ struct LibraryView: View {
         HStack(spacing: 0) {
             projectsColumn
                 .frame(width: 200)
-                .background(Constants.VisualStyle.sidebar)
+                .background(Constants.VisualStyle.surfaceRaised)
 
             verticalDivider
 
@@ -99,17 +99,18 @@ struct LibraryView: View {
             }
             .scrollIndicators(.hidden)
 
-            Divider()
-                .opacity(0.25)
+            Rectangle()
+                .fill(Constants.VisualStyle.divider)
+                .frame(height: 0.5)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Button {
                     viewModel.setCurrentProjectToSelected()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "scope")
                             .font(.system(size: 10.5, weight: .medium))
-                        Text("设为当前项目")
+                        Text(canMarkAsCurrent ? "设为当前项目" : selectedProjectFootnoteTitle)
                             .font(.system(size: 11.5, weight: .medium))
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -117,7 +118,7 @@ struct LibraryView: View {
                     }
                     .foregroundStyle(canMarkAsCurrent ? Constants.VisualStyle.textSecondary : Constants.VisualStyle.textQuaternary)
                     .padding(.horizontal, 8)
-                    .frame(height: 26)
+                    .frame(height: Constants.Layout.regularControlHeight)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -127,28 +128,10 @@ struct LibraryView: View {
                 .buttonStyle(.plain)
                 .disabled(!canMarkAsCurrent)
 
-                HStack(spacing: 6) {
-                    Button {
-                        viewModel.startRenameSelectedProject()
-                    } label: {
-                        actionLabel(title: "重命名", systemImage: "pencil", enabled: viewModel.selectedProject != nil)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.selectedProject == nil)
-
-                    Button(role: .destructive) {
-                        viewModel.requestDeleteSelectedProject()
-                    } label: {
-                        actionLabel(
-                            title: "删除",
-                            systemImage: "trash",
-                            enabled: viewModel.selectedProject != nil && viewModel.selectedProject?.isDefault == false,
-                            tone: .danger
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.selectedProject == nil || viewModel.selectedProject?.isDefault == true)
-                }
+                Text(selectedProjectFootnote)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Constants.VisualStyle.textQuaternary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 10)
@@ -163,36 +146,18 @@ struct LibraryView: View {
             && viewModel.selectedProjectId != MainWindowViewModel.allProjectsSelection
     }
 
-    private enum FooterTone {
-        case neutral
-        case danger
+    private var selectedProjectFootnoteTitle: String {
+        if viewModel.selectedProjectId == MainWindowViewModel.allProjectsSelection {
+            return "请选择具体项目"
+        }
+        return "已是当前项目"
     }
 
-    private func actionLabel(title: String, systemImage: String, enabled: Bool, tone: FooterTone = .neutral) -> some View {
-        let foreground: Color = {
-            if !enabled {
-                return Constants.VisualStyle.textQuaternary
-            }
-            switch tone {
-            case .neutral: return Constants.VisualStyle.textSecondary
-            case .danger: return Constants.VisualStyle.danger
-            }
-        }()
-        return HStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 10.5, weight: .medium))
-            Text(title)
-                .font(.system(size: 11.5, weight: .medium))
-            Spacer(minLength: 0)
+    private var selectedProjectFootnote: String {
+        if viewModel.selectedProjectId == MainWindowViewModel.allProjectsSelection {
+            return "右键具体项目可重命名或删除。"
         }
-        .foregroundStyle(foreground)
-        .padding(.horizontal, 8)
-        .frame(height: 26)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Constants.VisualStyle.tintSubtle)
-        )
+        return "重命名和删除继续放在项目右键菜单里。"
     }
 
     // MARK: Entries column
@@ -244,7 +209,7 @@ struct LibraryView: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 30)
+        .frame(height: Constants.Layout.regularControlHeight)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(Constants.VisualStyle.surfaceRaised)
@@ -296,7 +261,7 @@ struct LibraryView: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
         }
     }
 
@@ -314,7 +279,7 @@ struct LibraryView: View {
     private var countSortRow: some View {
         HStack(spacing: 0) {
             Text("\(viewModel.displayedEntries.count) 条")
-                .font(.system(size: 10.5, weight: .medium))
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                 .tracking(0.8)
                 .foregroundStyle(Constants.VisualStyle.textQuaternary)
 
@@ -350,8 +315,12 @@ struct LibraryView: View {
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundStyle(Constants.VisualStyle.textSecondary)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 8)
+                .frame(height: Constants.Layout.compactControlHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Constants.VisualStyle.tintSubtle)
+                )
             }
             .buttonStyle(.plain)
             .padding(.leading, 6)
@@ -456,10 +425,10 @@ private struct ProjectRow: View {
                 }
             }
             .padding(.horizontal, 8)
-            .frame(height: 28)
+            .frame(height: Constants.Layout.regularRowHeight)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isActive ? Constants.VisualStyle.tintMedium : Color.clear)
+                    .fill(isActive ? Constants.VisualStyle.tintSubtle : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -501,18 +470,18 @@ private struct EntryListRow: View {
                         .foregroundStyle(Constants.VisualStyle.textTertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Text("\(entry.useCount) 次")
-                            .font(.system(size: 10.5, design: .monospaced))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
                         Text("·")
                             .opacity(0.5)
                         Text(lastUsedText)
-                            .font(.system(size: 10.5))
+                            .font(.system(size: 10))
                         if let projectName {
                             Text("·")
                                 .opacity(0.5)
                             Text(projectName)
-                                .font(.system(size: 10.5))
+                                .font(.system(size: 10))
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
@@ -524,13 +493,13 @@ private struct EntryListRow: View {
                     .foregroundStyle(Constants.VisualStyle.textQuaternary)
                 }
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 9)
             .padding(.leading, 12)
             .padding(.trailing, 14)
             .overlay(alignment: .leading) {
                 Rectangle()
                     .fill(isSelected ? Constants.VisualStyle.accent : Color.clear)
-                    .frame(width: 2)
+                    .frame(width: 1.5)
             }
             .background(isSelected ? Constants.VisualStyle.tintSubtle : Color.clear)
         }
@@ -582,8 +551,8 @@ private struct PreviewPane: View {
         return VStack(alignment: .leading, spacing: 0) {
             header(for: entry, type: type)
                 .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
                 .background(
                     VStack(spacing: 0) {
                         Spacer()
@@ -618,7 +587,7 @@ private struct PreviewPane: View {
     }
 
     private func header(for entry: Entry, type: Constants.EntryType) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
                     Image(systemName: type.symbolName)
@@ -630,8 +599,8 @@ private struct PreviewPane: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
                 .background(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Constants.VisualStyle.tintMedium)
+                    RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                        .fill(Constants.VisualStyle.tintSubtle)
                 )
 
                 if entry.isPinned {
@@ -645,7 +614,7 @@ private struct PreviewPane: View {
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
                             .fill(Constants.VisualStyle.warnDim)
                     )
                 }
@@ -666,7 +635,7 @@ private struct PreviewPane: View {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Constants.VisualStyle.textTertiary)
-                        .frame(width: 26, height: 24)
+                        .frame(width: Constants.Layout.compactControlHeight, height: Constants.Layout.compactControlHeight)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -702,7 +671,7 @@ private struct PreviewPane: View {
     }
 
     private func footer(for entry: Entry) -> some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
             MetaInline(label: "项目", value: projectName(for: entry) ?? "未归属")
             Rectangle()
                 .fill(Constants.VisualStyle.divider)
@@ -724,8 +693,8 @@ private struct PreviewPane: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 1)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(Constants.VisualStyle.tintMedium)
+                                    RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                                        .fill(Constants.VisualStyle.tintSubtle)
                                 )
                         }
                     }
@@ -775,7 +744,7 @@ struct TagChipsInline: View {
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
                             .fill(Constants.VisualStyle.tintSubtle)
                     )
             }
