@@ -4,10 +4,18 @@ import GRDB
 /// Manages the SQLite database lifecycle: creation, migration, and access.
 final class DatabaseManager {
     enum InitializationError: LocalizedError {
+        case storeBusyPreservingStore(underlying: Error, databaseURL: URL)
         case migrationFailedPreservingStore(underlying: Error, databaseURL: URL)
 
         var errorDescription: String? {
             switch self {
+            case .storeBusyPreservingStore(let underlying, let databaseURL):
+                return """
+                本地数据库当前被占用，已保留原始数据文件，未执行自动恢复。
+                数据库位置：\(databaseURL.path)
+                请先关闭其他 PromptPanel 实例或等待当前操作结束后重试。
+                具体错误：\(underlying.localizedDescription)
+                """
             case .migrationFailedPreservingStore(let underlying, let databaseURL):
                 return """
                 本地数据库升级失败，已保留原始数据文件，未执行自动重建。
@@ -22,6 +30,8 @@ final class DatabaseManager {
     let dbQueue: DatabaseQueue
     let databaseURL: URL
     private(set) var launchRecoveryReport: LaunchRecoveryReport?
+    private static let openRetryMaxAttempts = 4
+    private static let openRetryDelayMs = 120
 
     /// Initialize with a database at the specified URL.
     /// - Parameter url: Path to the SQLite database file. If nil, uses the default path.
@@ -34,6 +44,9 @@ final class DatabaseManager {
             dbQueue = try Self.openDatabase(at: databaseURL)
         } catch {
             PPLogger.database.error("Database open failed: \(error.localizedDescription)")
+            if let initializationError = Self.initializationErrorPreservingStore(for: error, databaseURL: databaseURL) {
+                throw initializationError
+            }
             if Self.storeExists(at: databaseURL) {
                 let report = try Self.quarantineBrokenStore(at: databaseURL, failureDescription: error.localizedDescription)
                 launchRecoveryReport = report
@@ -48,6 +61,9 @@ final class DatabaseManager {
             try Self.prepareDatabase(dbQueue, at: databaseURL)
         } catch {
             PPLogger.database.error("Database preparation failed without automatic recovery: \(error.localizedDescription)")
+            if let initializationError = Self.initializationErrorPreservingStore(for: error, databaseURL: databaseURL) {
+                throw initializationError
+            }
             throw InitializationError.migrationFailedPreservingStore(
                 underlying: error,
                 databaseURL: databaseURL
@@ -93,8 +109,25 @@ final class DatabaseManager {
         }
         #endif
 
-        let dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: config)
-        return dbQueue
+        var lastError: Error?
+        for attempt in 0...openRetryMaxAttempts {
+            do {
+                return try DatabaseQueue(path: databaseURL.path, configuration: config)
+            } catch {
+                lastError = error
+                guard shouldRetryOpen(after: error), attempt < openRetryMaxAttempts else {
+                    throw error
+                }
+
+                let retryAttempt = attempt + 1
+                PPLogger.database.warning(
+                    "Database open hit a transient busy/locked state; retrying attempt \(retryAttempt) of \(openRetryMaxAttempts)"
+                )
+                usleep(useconds_t(openRetryDelayMs * 1_000))
+            }
+        }
+
+        throw lastError ?? DatabaseError(resultCode: .SQLITE_CANTOPEN, message: "Database open failed after retries")
     }
 
     private static func prepareDatabase(_ dbQueue: DatabaseQueue, at databaseURL: URL) throws {
@@ -113,6 +146,30 @@ final class DatabaseManager {
         let fileManager = FileManager.default
         let candidateURLs = storeFileURLs(for: databaseURL)
         return candidateURLs.contains { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private static func shouldRetryOpen(after error: Error) -> Bool {
+        isDatabaseBusyOrLocked(error)
+    }
+
+    private static func initializationErrorPreservingStore(for error: Error, databaseURL: URL) -> InitializationError? {
+        guard isDatabaseBusyOrLocked(error) else {
+            return nil
+        }
+        return .storeBusyPreservingStore(underlying: error, databaseURL: databaseURL)
+    }
+
+    private static func isDatabaseBusyOrLocked(_ error: Error) -> Bool {
+        guard let databaseError = error as? DatabaseError else {
+            return false
+        }
+
+        let busyOrLockedCodes: Set<Int32> = [
+            ResultCode.SQLITE_BUSY.rawValue,
+            ResultCode.SQLITE_LOCKED.rawValue
+        ]
+        return busyOrLockedCodes.contains(databaseError.resultCode.rawValue)
+            || busyOrLockedCodes.contains(databaseError.extendedResultCode.rawValue)
     }
 
     private static func quarantineBrokenStore(at databaseURL: URL, failureDescription: String) throws -> LaunchRecoveryReport {

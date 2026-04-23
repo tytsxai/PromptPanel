@@ -172,9 +172,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return false
         }
 
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? Constants.bundleIdentifier
         let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
         let runningProcessIdentifiersProvider = {
-            (runningInstances ?? AppLaunchCoordinator.runningInstances(bundleIdentifier: Constants.bundleIdentifier))
+            (runningInstances ?? AppLaunchCoordinator.runningInstances(bundleIdentifier: bundleIdentifier))
                 .map(\.processIdentifier)
         }
         guard let existingProcessIdentifier = AppLaunchCoordinator.duplicateProcessIdentifierAfterSettling(
@@ -444,6 +445,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if mainWindow == nil {
             let contentView = MainWindowView(viewModel: mainWindowViewModel)
             let defaultSize = Constants.MainWindowLayout.defaultContentSize
+            let windowChromeColor = NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? NSColor(srgbRed: 30 / 255, green: 31 / 255, blue: 35 / 255, alpha: 1)
+                    : NSColor(srgbRed: 246 / 255, green: 247 / 255, blue: 249 / 255, alpha: 1)
+            }
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: defaultSize.width, height: defaultSize.height),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
@@ -454,10 +460,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.center()
             window.contentView = NSHostingView(rootView: contentView)
             window.isReleasedWhenClosed = false
-            window.titlebarAppearsTransparent = true
+            window.titlebarAppearsTransparent = false
             window.isMovableByWindowBackground = true
-            window.backgroundColor = .clear
-            window.isOpaque = false
+            window.backgroundColor = windowChromeColor
+            window.isOpaque = true
             window.delegate = self
             mainWindow = window
         }

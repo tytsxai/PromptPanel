@@ -35,37 +35,32 @@ jobs:
           zsh -n scripts/restore-backup.sh
           zsh -n scripts/release-readiness.sh
 
-      - name: Restore script rejects non-PromptPanel backups
+      - name: Restore script validates safe targets and rejects invalid backups
         run: |
           tmp_dir="$(mktemp -d)"
           trap 'rm -rf "$tmp_dir"' EXIT
+          valid_backup="$tmp_dir/promptpanel-valid.sqlite"
           bad_backup="$tmp_dir/not-promptpanel.sqlite"
+          restore_target="$tmp_dir/restore-target"
+
+          sqlite3 "$valid_backup" '
+            CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, is_default INTEGER NOT NULL, created_at TEXT, updated_at TEXT);
+            CREATE TABLE entries (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, title TEXT, content TEXT);
+            CREATE VIRTUAL TABLE entries_fts USING fts5(title, content);
+            CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE execution_logs (id TEXT PRIMARY KEY);
+            CREATE TABLE grdb_migrations (identifier TEXT PRIMARY KEY);
+            INSERT INTO projects(id, name, is_default) VALUES ("default-project", "Default", 1);
+            INSERT INTO app_settings(key, value) VALUES ("current_project_id", "default-project");
+          '
           sqlite3 "$bad_backup" 'CREATE TABLE unrelated (id INTEGER PRIMARY KEY);'
 
-          if scripts/restore-backup.sh "$bad_backup"; then
+          scripts/restore-backup.sh --dry-run --target-dir "$restore_target" "$valid_backup"
+
+          if scripts/restore-backup.sh --dry-run --target-dir "$restore_target" "$bad_backup"; then
             echo "restore-backup.sh unexpectedly accepted an invalid backup" >&2
             exit 1
           fi
 
-      - name: Build package
-        run: swift build
-
-      - name: Run tests
-        run: swift test
-
-      - name: Build release app
-        run: scripts/build-app.sh --output-dir "$RUNNER_TEMP/promptpanel-release"
-
-      - name: Verify release bundle and archive
-        run: |
-          app_path="$RUNNER_TEMP/promptpanel-release/PromptPanel.app"
-          zip_path=$(echo "$RUNNER_TEMP"/promptpanel-release/PromptPanel-*.zip)
-          unzip_dir="$RUNNER_TEMP/promptpanel-unpacked"
-
-          test -d "$app_path"
-          test -f "$zip_path"
-
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          ditto -x -k "$zip_path" "$unzip_dir"
-          test -x "$unzip_dir/PromptPanel.app/Contents/MacOS/PromptPanel"
-          codesign --verify --deep --strict --verbose=1 "$unzip_dir/PromptPanel.app"
+      - name: Run formal release-readiness gate
+        run: scripts/release-readiness.sh --output-dir "$RUNNER_TEMP/promptpanel-release"

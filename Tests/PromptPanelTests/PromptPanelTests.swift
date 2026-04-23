@@ -1016,6 +1016,31 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: Constants.recoveryDirectory(for: databaseURL).path))
     }
 
+    func testDatabaseManagerDoesNotQuarantineStoreWhenDatabaseIsLocked() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("sqlite")
+
+        let lockingQueue = try DatabaseQueue(path: databaseURL.path)
+        try lockingQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "BEGIN EXCLUSIVE TRANSACTION")
+        }
+        defer {
+            try? lockingQueue.writeWithoutTransaction { db in
+                try db.execute(sql: "ROLLBACK TRANSACTION")
+            }
+        }
+
+        XCTAssertThrowsError(try DatabaseManager(url: databaseURL)) { error in
+            guard case DatabaseManager.InitializationError.storeBusyPreservingStore = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: databaseURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: Constants.recoveryDirectory(for: databaseURL).path))
+    }
+
     func testStorageMaintenanceKeepsManualBackupsBeyondAutomaticRetention() throws {
         let databaseManager = try makeDatabaseManager()
         let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
@@ -2050,6 +2075,40 @@ func databaseManagerRecoversFromCorruptedStore() throws {
     let recoveredFileURL = databaseManager.launchRecoveryReport?.quarantinedFilesDirectoryURL
         .appendingPathComponent(brokenDatabaseURL.lastPathComponent)
     #expect(FileManager.default.fileExists(atPath: recoveredFileURL?.path ?? ""))
+}
+
+@Test
+func databaseManagerDoesNotQuarantineStoreWhenDatabaseIsLocked() throws {
+    let databaseURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("sqlite")
+
+    let lockingQueue = try DatabaseQueue(path: databaseURL.path)
+    try lockingQueue.writeWithoutTransaction { db in
+        try db.execute(sql: "BEGIN EXCLUSIVE TRANSACTION")
+    }
+    defer {
+        try? lockingQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "ROLLBACK TRANSACTION")
+        }
+    }
+
+    do {
+        _ = try DatabaseManager(url: databaseURL)
+        Issue.record("Expected a storeBusyPreservingStore error, but initialization succeeded.")
+    } catch let error as DatabaseManager.InitializationError {
+        switch error {
+        case .storeBusyPreservingStore:
+            break
+        default:
+            Issue.record("Unexpected initialization error: \(error)")
+        }
+    } catch {
+        Issue.record("Unexpected error: \(error)")
+    }
+
+    #expect(FileManager.default.fileExists(atPath: databaseURL.path))
+    #expect(!FileManager.default.fileExists(atPath: Constants.recoveryDirectory(for: databaseURL).path))
 }
 
 @Test

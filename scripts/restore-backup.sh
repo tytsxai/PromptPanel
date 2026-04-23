@@ -2,17 +2,48 @@
 
 set -euo pipefail
 
-APP_SUPPORT_DIR="${PROMPTPANEL_APP_SUPPORT_DIR:-${HOME}/Library/Application Support/PromptPanel}"
-DATABASE_PATH="${APP_SUPPORT_DIR}/promptpanel.db"
+LIVE_APP_SUPPORT_DIR="${HOME}/Library/Application Support/PromptPanel"
+DEFAULT_APP_SUPPORT_DIR="${PROMPTPANEL_APP_SUPPORT_DIR:-${LIVE_APP_SUPPORT_DIR}}"
+TARGET_APP_SUPPORT_DIR="${DEFAULT_APP_SUPPORT_DIR:A}"
+DRY_RUN=0
 
 usage() {
     cat <<'EOF'
-Usage: scripts/restore-backup.sh /absolute/path/to/backup.sqlite
+Usage: scripts/restore-backup.sh [options] /absolute/path/to/backup.sqlite
 
 Restores the selected backup into the live PromptPanel database location.
 The app must be closed before running this script.
+
+Options:
+  --target-dir <path>  Restore into a specific PromptPanel App Support directory.
+  --dry-run            Validate the backup and target path without modifying files.
+  --help               Show this help message.
 EOF
 }
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --target-dir)
+            TARGET_APP_SUPPORT_DIR="${2:A}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        --help)
+            usage
+            exit 0
+            ;;
+        --*)
+            usage >&2
+            exit 64
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 if [[ $# -ne 1 ]]; then
     usage >&2
@@ -20,6 +51,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 BACKUP_SOURCE="${1:A}"
+DATABASE_PATH="${TARGET_APP_SUPPORT_DIR}/promptpanel.db"
 
 if [[ ! -f "$BACKUP_SOURCE" ]]; then
     echo "Backup file not found: $BACKUP_SOURCE" >&2
@@ -73,16 +105,23 @@ if [[ -z "$CURRENT_PROJECT_REFERENCE_COUNT" || "$CURRENT_PROJECT_REFERENCE_COUNT
     exit 1
 fi
 
-if pgrep -x "PromptPanel" >/dev/null 2>&1; then
+if [[ $DRY_RUN -eq 0 && "$TARGET_APP_SUPPORT_DIR" == "${LIVE_APP_SUPPORT_DIR:A}" ]] && pgrep -x "PromptPanel" >/dev/null 2>&1; then
     echo "PromptPanel is running. Quit the app before restoring a backup." >&2
     exit 1
 fi
 
-mkdir -p "$APP_SUPPORT_DIR"
-chmod 700 "$APP_SUPPORT_DIR"
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo "Backup validation passed: ${BACKUP_SOURCE}"
+    echo "Dry run target directory: ${TARGET_APP_SUPPORT_DIR}"
+    echo "Dry run target database: ${DATABASE_PATH}"
+    exit 0
+fi
+
+mkdir -p "$TARGET_APP_SUPPORT_DIR"
+chmod 700 "$TARGET_APP_SUPPORT_DIR"
 
 TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
-RECOVERY_DIR="${APP_SUPPORT_DIR}/Recovery/manual-restore-${TIMESTAMP}"
+RECOVERY_DIR="${TARGET_APP_SUPPORT_DIR}/Recovery/manual-restore-${TIMESTAMP}"
 
 if [[ -e "$DATABASE_PATH" || -e "${DATABASE_PATH}-wal" || -e "${DATABASE_PATH}-shm" ]]; then
     mkdir -p "$RECOVERY_DIR"

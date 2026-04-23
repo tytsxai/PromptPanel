@@ -8,6 +8,7 @@ PACKAGE_ROOT="$REPO_ROOT"
 OUTPUT_ROOT="${REPO_ROOT}/dist/release-readiness"
 SIGN_IDENTITY="none"
 PUBLIC_DISTRIBUTION=0
+ALLOW_BUILD_ONLY_TESTS=0
 SKIP_SMOKE_LAUNCH=0
 SHORT_VERSION_OVERRIDE=""
 BUILD_VERSION_OVERRIDE=""
@@ -31,6 +32,7 @@ Runs the local release-readiness checks for PromptPanel:
 Options:
   --output-dir <path>          Output directory for the release bundle.
   --sign-identity <id>         codesign identity passed to build-app.sh.
+  --allow-build-only-tests     Allow build-only test validation when this machine lacks xctest.
   --public-distribution        Fail if the build still uses ad-hoc signing or this machine lacks xctest.
   --skip-smoke-launch          Skip the isolated startup smoke check.
   --short-version <ver>        Override CFBundleShortVersionString.
@@ -54,6 +56,31 @@ fail() {
     exit 1
 }
 
+activate_full_xcode_if_available() {
+    local candidates=()
+    local candidate
+
+    if [[ -n "${DEVELOPER_DIR:-}" ]]; then
+        candidates+=("${DEVELOPER_DIR:A}")
+    fi
+
+    candidates+=(
+        "/Applications/Xcode.app/Contents/Developer"
+        "/Applications/Xcode-beta.app/Contents/Developer"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        [[ -d "$candidate" ]] || continue
+        if DEVELOPER_DIR="$candidate" xcrun --find xctest >/dev/null 2>&1; then
+            export DEVELOPER_DIR="$candidate"
+            log_info "Using full Xcode developer directory: $DEVELOPER_DIR"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --output-dir)
@@ -63,6 +90,10 @@ while [[ $# -gt 0 ]]; do
         --sign-identity)
             SIGN_IDENTITY="$2"
             shift 2
+            ;;
+        --allow-build-only-tests)
+            ALLOW_BUILD_ONLY_TESTS=1
+            shift
             ;;
         --public-distribution)
             PUBLIC_DISTRIBUTION=1
@@ -119,19 +150,26 @@ mkdir -p "$OUTPUT_ROOT"
 
 log_info "Validating shell scripts"
 zsh -n "${REPO_ROOT}/scripts/build-app.sh"
+zsh -n "${REPO_ROOT}/scripts/launch-computer-use.sh"
 zsh -n "${REPO_ROOT}/scripts/notarize-app.sh"
 zsh -n "${REPO_ROOT}/scripts/restore-backup.sh"
 zsh -n "${REPO_ROOT}/scripts/release-readiness.sh"
 
-log_info "Building Swift package"
-swift build --package-path "$PACKAGE_ROOT"
-
 TEST_RUNNER_AVAILABLE=0
 if xcrun --find xctest >/dev/null 2>&1; then
     TEST_RUNNER_AVAILABLE=1
+elif activate_full_xcode_if_available; then
+    TEST_RUNNER_AVAILABLE=1
 else
-    log_warn "xctest is unavailable on this machine; swift test can only validate the test bundle build."
+    if [[ $ALLOW_BUILD_ONLY_TESTS -eq 1 ]]; then
+        log_warn "xctest is unavailable on this machine; continuing in build-only test validation mode because --allow-build-only-tests was set."
+    else
+        fail "Real test execution requires xctest. Install/select a full Xcode toolchain, or rerun with --allow-build-only-tests to accept build-only validation."
+    fi
 fi
+
+log_info "Building Swift package"
+swift build --package-path "$PACKAGE_ROOT"
 
 log_info "Running swift test"
 swift test --package-path "$PACKAGE_ROOT"
@@ -174,6 +212,14 @@ ZIP_PATH="${ZIP_MATCHES[1]}"
 
 log_info "Verifying code signatures"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+if [[ "$SIGN_IDENTITY" == "none" ]]; then
+    BUNDLE_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${APP_PATH}/Contents/Info.plist")"
+    DESIGNATED_REQUIREMENT="$(codesign -dr - "$APP_PATH" 2>&1)"
+    if ! grep -Fq "designated => identifier \"$BUNDLE_IDENTIFIER\"" <<<"$DESIGNATED_REQUIREMENT"; then
+        fail "Ad-hoc build did not retain a stable designated requirement: $DESIGNATED_REQUIREMENT"
+    fi
+fi
 
 UNPACK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/promptpanel-unpacked.XXXXXX")"
 cleanup_unpack() {

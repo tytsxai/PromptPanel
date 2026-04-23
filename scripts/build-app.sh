@@ -14,6 +14,8 @@ SHORT_VERSION_OVERRIDE=""
 BUILD_VERSION_OVERRIDE=""
 SPARKLE_FEED_URL=""
 SPARKLE_PUBLIC_ED_KEY=""
+BUNDLE_IDENTIFIER=""
+DISPLAY_NAME_OVERRIDE=""
 
 usage() {
     cat <<'EOF'
@@ -26,6 +28,9 @@ Options:
   --no-archive            Skip zip archive creation.
   --short-version <ver>   Override CFBundleShortVersionString in the packaged app.
   --build-version <ver>   Override CFBundleVersion in the packaged app.
+  --bundle-identifier <id>
+                          Override CFBundleIdentifier in the packaged app.
+  --display-name <name>   Override CFBundleDisplayName and CFBundleName.
   --sparkle-feed-url <u>  Inject SUFeedURL into the packaged app's Info.plist.
   --sparkle-public-ed-key Inject SUPublicEDKey into the packaged app's Info.plist.
   --help                  Show this help message.
@@ -56,6 +61,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --build-version)
             BUILD_VERSION_OVERRIDE="$2"
+            shift 2
+            ;;
+        --bundle-identifier)
+            BUNDLE_IDENTIFIER="$2"
+            shift 2
+            ;;
+        --display-name)
+            DISPLAY_NAME_OVERRIDE="$2"
             shift 2
             ;;
         --sparkle-feed-url)
@@ -92,10 +105,17 @@ BIN_DIR="$(swift build --package-path "$PACKAGE_ROOT" -c "$CONFIGURATION" --show
 codesign_path() {
     local target_path="$1"
     local runtime_mode="${2:-off}"
+    local stable_designated_requirement="${3:-off}"
     local args=(--force)
 
     if [[ "$SIGN_IDENTITY" == "none" ]]; then
         args+=(--sign -)
+        if [[ "$stable_designated_requirement" == "on" ]]; then
+            args+=(
+                --identifier "$BUNDLE_IDENTIFIER"
+                --requirements "=designated => identifier \"$BUNDLE_IDENTIFIER\""
+            )
+        fi
     else
         args+=(--timestamp --sign "$SIGN_IDENTITY")
         if [[ "$runtime_mode" == "runtime" ]]; then
@@ -151,6 +171,13 @@ fi
 if [[ -n "$BUILD_VERSION_OVERRIDE" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_VERSION_OVERRIDE}" "${CONTENTS_DIR}/Info.plist"
 fi
+if [[ -n "$BUNDLE_IDENTIFIER" ]]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${BUNDLE_IDENTIFIER}" "${CONTENTS_DIR}/Info.plist"
+fi
+if [[ -n "$DISPLAY_NAME_OVERRIDE" ]]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${DISPLAY_NAME_OVERRIDE}" "${CONTENTS_DIR}/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName ${DISPLAY_NAME_OVERRIDE}" "${CONTENTS_DIR}/Info.plist"
+fi
 if [[ -n "$SPARKLE_FEED_URL" ]]; then
     /usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL}" "${CONTENTS_DIR}/Info.plist" 2>/dev/null \
         || /usr/libexec/PlistBuddy -c "Set :SUFeedURL ${SPARKLE_FEED_URL}" "${CONTENTS_DIR}/Info.plist"
@@ -159,6 +186,7 @@ if [[ -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
     /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string ${SPARKLE_PUBLIC_ED_KEY}" "${CONTENTS_DIR}/Info.plist" 2>/dev/null \
         || /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey ${SPARKLE_PUBLIC_ED_KEY}" "${CONTENTS_DIR}/Info.plist"
 fi
+BUNDLE_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${CONTENTS_DIR}/Info.plist")"
 
 cp "${BIN_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 chmod 755 "${MACOS_DIR}/${APP_NAME}"
@@ -193,9 +221,18 @@ if [[ "$SIGN_IDENTITY" != "none" ]]; then
     echo "Signing app with identity: ${SIGN_IDENTITY}"
 fi
 
-codesign_path "${APP_PATH}" runtime
+codesign_path "${APP_PATH}" runtime on
 
 codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+
+if [[ "$SIGN_IDENTITY" == "none" ]]; then
+    DESIGNATED_REQUIREMENT="$(codesign -dr - "${APP_PATH}" 2>&1)"
+    if ! grep -Fq "designated => identifier \"$BUNDLE_IDENTIFIER\"" <<<"$DESIGNATED_REQUIREMENT"; then
+        echo "Ad-hoc signing did not produce the expected stable designated requirement:" >&2
+        echo "$DESIGNATED_REQUIREMENT" >&2
+        exit 1
+    fi
+fi
 
 SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${CONTENTS_DIR}/Info.plist")"
 BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${CONTENTS_DIR}/Info.plist")"
