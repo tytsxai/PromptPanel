@@ -1226,6 +1226,21 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertNotNil(summary.latestFailureAt)
     }
 
+    func testReleaseReadinessBuildOnlyModeDoesNotRequireTestRunner() throws {
+        let script = try readRepositoryText("scripts/release-readiness.sh")
+
+        XCTAssertTrue(script.contains("Running swift test in build-only validation mode"))
+        XCTAssertTrue(script.contains("swift build --package-path \"$PACKAGE_ROOT\" --build-tests"))
+    }
+
+    func testReleaseReadinessExercisesBackupRestoreDrill() throws {
+        let script = try readRepositoryText("scripts/release-readiness.sh")
+
+        XCTAssertTrue(script.contains("Verifying backup restore path"))
+        XCTAssertTrue(script.contains("\"${REPO_ROOT}/scripts/restore-backup.sh\" --target-dir \"$RESTORE_APP_SUPPORT_DIR\" \"$LATEST_BACKUP_PATH\""))
+        XCTAssertTrue(script.contains("Restored database integrity check failed"))
+    }
+
     private func waitForRecentExecutionLog(
         _ logRepository: LogRepository,
         timeout: TimeInterval = 1
@@ -2301,6 +2316,23 @@ func healthSummaryCountsResultsAcrossOutcomes() throws {
     #expect(summary.latestExecutionAt != nil)
     #expect(summary.latestFailureAt != nil)
 }
+
+@Test
+func releaseReadinessBuildOnlyModeDoesNotRequireTestRunner() throws {
+    let script = try readRepositoryText("scripts/release-readiness.sh")
+
+    #expect(script.contains("Running swift test in build-only validation mode"))
+    #expect(script.contains("swift build --package-path \"$PACKAGE_ROOT\" --build-tests"))
+}
+
+@Test
+func releaseReadinessExercisesBackupRestoreDrill() throws {
+    let script = try readRepositoryText("scripts/release-readiness.sh")
+
+    #expect(script.contains("Verifying backup restore path"))
+    #expect(script.contains("\"${REPO_ROOT}/scripts/restore-backup.sh\" --target-dir \"$RESTORE_APP_SUPPORT_DIR\" \"$LATEST_BACKUP_PATH\""))
+    #expect(script.contains("Restored database integrity check failed"))
+}
 #endif
 
 private final class FakeHotkeyRegistrar: HotkeyRegistrationHandling {
@@ -2361,4 +2393,13 @@ private func makeDatabaseManager() throws -> DatabaseManager {
         .appendingPathComponent(UUID().uuidString)
         .appendingPathExtension("sqlite")
     return try DatabaseManager(url: databaseURL)
+}
+
+private func readRepositoryText(_ relativePath: String) throws -> String {
+    let repositoryRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let fileURL = repositoryRoot.appendingPathComponent(relativePath)
+    return try String(contentsOf: fileURL, encoding: .utf8)
 }

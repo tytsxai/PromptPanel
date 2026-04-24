@@ -171,8 +171,13 @@ fi
 log_info "Building Swift package"
 swift build --package-path "$PACKAGE_ROOT"
 
-log_info "Running swift test"
-swift test --package-path "$PACKAGE_ROOT"
+if [[ $TEST_RUNNER_AVAILABLE -eq 1 ]]; then
+    log_info "Running swift test"
+    swift test --package-path "$PACKAGE_ROOT"
+else
+    log_info "Running swift test in build-only validation mode"
+    swift build --package-path "$PACKAGE_ROOT" --build-tests
+fi
 
 if [[ $PUBLIC_DISTRIBUTION -eq 1 && $TEST_RUNNER_AVAILABLE -eq 0 ]]; then
     fail "Public distribution precheck failed because xctest is unavailable on this machine."
@@ -244,11 +249,16 @@ if [[ $SKIP_SMOKE_LAUNCH -eq 0 ]]; then
     APP_BINARY="${APP_PATH}/Contents/MacOS/PromptPanel"
     APP_LOG="${QA_ROOT}/app.log"
 
-    cleanup_smoke() {
+    stop_smoke_app() {
         if [[ -n "${APP_PID:-}" ]] && kill -0 "$APP_PID" >/dev/null 2>&1; then
             kill "$APP_PID" >/dev/null 2>&1 || true
             wait "$APP_PID" >/dev/null 2>&1 || true
         fi
+        unset APP_PID 2>/dev/null || true
+    }
+
+    cleanup_smoke() {
+        stop_smoke_app
         rm -rf "$QA_ROOT"
     }
 
@@ -291,8 +301,22 @@ if [[ $SKIP_SMOKE_LAUNCH -eq 0 ]]; then
         log_warn "sqlite3 is unavailable; skipped database integrity verification for the smoke-launch database."
     fi
 
+    LATEST_BACKUP_PATH="$(find "$BACKUP_DIR" -maxdepth 1 -name '*.sqlite' -type f -print | sort | tail -n 1)"
+    [[ -n "$LATEST_BACKUP_PATH" ]] || fail "Smoke launch did not produce a backup file that can be restored."
+
+    log_info "Verifying backup restore path"
+    stop_smoke_app
+    RESTORE_APP_SUPPORT_DIR="${QA_ROOT}/RestoreTarget"
+    "${REPO_ROOT}/scripts/restore-backup.sh" --target-dir "$RESTORE_APP_SUPPORT_DIR" "$LATEST_BACKUP_PATH"
+
+    RESTORED_DATABASE_PATH="${RESTORE_APP_SUPPORT_DIR}/promptpanel.db"
+    [[ -f "$RESTORED_DATABASE_PATH" ]] || fail "Restore drill did not create the restored database at $RESTORED_DATABASE_PATH"
+    if command -v sqlite3 >/dev/null 2>&1; then
+        restored_integrity_result="$(sqlite3 "$RESTORED_DATABASE_PATH" 'PRAGMA integrity_check;' 2>/dev/null || true)"
+        [[ "$restored_integrity_result" == "ok" ]] || fail "Restored database integrity check failed: ${restored_integrity_result:-unknown}"
+    fi
+
     cleanup_smoke
-    unset APP_PID
 fi
 
 log_info "Checks completed successfully"
