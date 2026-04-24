@@ -68,7 +68,8 @@ final class EntryRepository: @unchecked Sendable {
                     entries.sort_order DESC,
                     entries.last_used_at DESC,
                     entries.use_count DESC,
-                    project_priority ASC
+                    project_priority ASC,
+                    entries.updated_at DESC
                 """
             let rows = try Row.fetchAll(db, sql: sql, arguments: [currentProjectId, currentProjectId, defaultProjectId])
             return try rows.map { try Entry(row: $0) }

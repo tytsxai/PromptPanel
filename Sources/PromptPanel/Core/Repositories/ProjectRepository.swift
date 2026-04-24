@@ -16,8 +16,10 @@ final class ProjectRepository: @unchecked Sendable {
     func fetchAll() throws -> [Project] {
         try dbQueue.read { db in
             try Project
-                .order(Project.Columns.isDefault.desc)
-                .order(Project.Columns.name.asc)
+                .order(
+                    Project.Columns.isDefault.desc,
+                    Project.Columns.name.asc
+                )
                 .fetchAll(db)
         }
     }

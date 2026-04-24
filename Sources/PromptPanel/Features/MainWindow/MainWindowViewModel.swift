@@ -182,10 +182,11 @@ final class MainWindowViewModel: ObservableObject {
     }
 
     var selectedEntry: Entry? {
+        let visibleEntries = displayedEntries
         guard let selectedEntryId else {
-            return entries.first
+            return visibleEntries.first
         }
-        return entries.first(where: { $0.id == selectedEntryId }) ?? entries.first
+        return visibleEntries.first(where: { $0.id == selectedEntryId }) ?? visibleEntries.first
     }
 
     var availableEntryKinds: [Constants.EntryType] {
@@ -235,15 +236,44 @@ final class MainWindowViewModel: ObservableObject {
             }
             switch entrySortMode {
             case .uses:
-                return lhs.useCount > rhs.useCount
+                if lhs.useCount != rhs.useCount {
+                    return lhs.useCount > rhs.useCount
+                }
+                return compareEntriesByRecencyThenTitle(lhs, rhs)
             case .recent:
-                let l = lhs.lastUsedAt ?? lhs.updatedAt
-                let r = rhs.lastUsedAt ?? rhs.updatedAt
-                return l > r
+                return compareEntriesByRecencyThenTitle(lhs, rhs)
             case .alpha:
-                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+                let titleComparison = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+                if titleComparison != .orderedSame {
+                    return titleComparison == .orderedAscending
+                }
+                return compareEntriesByRecencyThenId(lhs, rhs)
             }
         }
+    }
+
+    private func compareEntriesByRecencyThenTitle(_ lhs: Entry, _ rhs: Entry) -> Bool {
+        let lhsDate = lhs.lastUsedAt ?? lhs.updatedAt
+        let rhsDate = rhs.lastUsedAt ?? rhs.updatedAt
+        if lhsDate != rhsDate {
+            return lhsDate > rhsDate
+        }
+
+        let titleComparison = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+        if titleComparison != .orderedSame {
+            return titleComparison == .orderedAscending
+        }
+
+        return lhs.id < rhs.id
+    }
+
+    private func compareEntriesByRecencyThenId(_ lhs: Entry, _ rhs: Entry) -> Bool {
+        let lhsDate = lhs.lastUsedAt ?? lhs.updatedAt
+        let rhsDate = rhs.lastUsedAt ?? rhs.updatedAt
+        if lhsDate != rhsDate {
+            return lhsDate > rhsDate
+        }
+        return lhs.id < rhs.id
     }
 
     func entryCount(forProjectId id: String) -> Int {
@@ -780,20 +810,17 @@ final class MainWindowViewModel: ObservableObject {
         let projectIds = projects.map(\.id)
         let allProjectsSelection = Self.allProjectsSelection
         let entryRepository = self.entryRepository
+        let entriesLoadQueue = self.entriesLoadQueue
 
         entriesRefreshGeneration += 1
         let generation = entriesRefreshGeneration
 
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self else {
+            guard self != nil else {
                 return
             }
 
-            self.entriesLoadQueue.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
+            entriesLoadQueue.async {
                 let result: Result<[Entry], Error>
                 do {
                     let entries: [Entry]

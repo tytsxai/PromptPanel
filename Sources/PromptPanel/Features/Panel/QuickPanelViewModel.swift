@@ -240,6 +240,7 @@ final class QuickPanelViewModel: ObservableObject {
         let (cleanedQuery, tagFilter) = Self.extractTagFilter(from: self.query)
         let query = cleanedQuery
         let searchService = self.searchService
+        let searchQueue = self.searchQueue
 
         appState.currentProjectId = effectiveCurrentProjectId
         isLoadingEntries = true
@@ -247,15 +248,11 @@ final class QuickPanelViewModel: ObservableObject {
         let generation = searchGeneration
 
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self else {
+            guard self != nil else {
                 return
             }
 
-            self.searchQueue.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
+            searchQueue.async {
                 let result: Result<[Entry], Error>
                 do {
                     var entries = try searchService.search(
