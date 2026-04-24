@@ -24,6 +24,20 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(try settingsRepository.getCurrentProjectId(), defaultProject.id)
     }
 
+    func testProjectsFetchAllKeepsDefaultProjectFirstThenSortsByName() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+
+        try projectRepository.create(Project(name: "000 Alpha"))
+        try projectRepository.create(Project(name: "ZZZ Later"))
+
+        let projects = try projectRepository.fetchAll()
+
+        XCTAssertEqual(projects.first?.id, defaultProject.id)
+        XCTAssertEqual(projects.dropFirst().map(\.name), ["000 Alpha", "ZZZ Later"])
+    }
+
     func testResolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() throws {
         let defaultProjectId = UUID().uuidString
 
@@ -122,6 +136,48 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(result.count, 2)
         XCTAssertEqual(result.first?.projectId, currentProject.id)
         XCTAssertEqual(result.last?.projectId, defaultProject.id)
+    }
+
+    func testMixedEntriesUseUpdatedAtAsFinalTieBreaker() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let currentProject = Project(name: "Current")
+        try projectRepository.create(currentProject)
+
+        let oldDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let newDate = oldDate.addingTimeInterval(60)
+        let oldEntry = Entry(
+            projectId: currentProject.id,
+            title: "Old",
+            content: "old",
+            sortOrder: 0,
+            useCount: 0,
+            lastUsedAt: nil,
+            createdAt: oldDate,
+            updatedAt: oldDate
+        )
+        let newEntry = Entry(
+            projectId: currentProject.id,
+            title: "New",
+            content: "new",
+            sortOrder: 0,
+            useCount: 0,
+            lastUsedAt: nil,
+            createdAt: newDate,
+            updatedAt: newDate
+        )
+        try entryRepository.create(oldEntry)
+        try entryRepository.create(newEntry)
+
+        let result = try entryRepository.fetchMixed(
+            currentProjectId: currentProject.id,
+            defaultProjectId: defaultProject.id
+        )
+
+        XCTAssertEqual(result.map(\.id), [newEntry.id, oldEntry.id])
     }
 
     func testMigrateAndDeleteMovesEntriesToTargetProject() throws {
@@ -391,7 +447,7 @@ final class PromptPanelTests: XCTestCase {
 
         _ = try waitForRecentExecutionLog(logRepository)
         let recentLogs = try logRepository.fetchRecent(limit: 10)
-        let persistedEntry = try XCTUnwrap(try entryRepository.fetch(id: entry.id))
+        let persistedEntry = try XCTUnwrap(try entryRepository.fetchById(entry.id))
 
         XCTAssertEqual(recentLogs.count, 1)
         XCTAssertEqual(recentLogs.first?.triggerSource, Constants.ExecutionTrigger.keyboardSubmit.rawValue)
@@ -643,6 +699,68 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(appState.currentProjectId, currentProject.id)
         XCTAssertEqual(try settingsRepository.getCurrentProjectId(), currentProject.id)
         XCTAssertEqual(viewModel.bannerMessage, "当前项目已切换为 \(currentProject.name)。")
+    }
+
+    @MainActor
+    func testMainWindowSelectedEntryFollowsVisibleFilters() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let loginItemService = LoginItemService()
+        let updaterService = UpdaterService()
+        let storageMaintenanceService = StorageMaintenanceService(
+            dbQueue: databaseManager.dbQueue,
+            logRepository: logRepository,
+            databaseURL: databaseManager.databaseURL
+        )
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let promptEntry = Entry(
+            projectId: defaultProject.id,
+            title: "Prompt Entry",
+            content: "prompt",
+            type: Constants.EntryType.prompt.rawValue
+        )
+        let codeEntry = Entry(
+            projectId: defaultProject.id,
+            title: "Code Entry",
+            content: "code",
+            type: Constants.EntryType.code.rawValue
+        )
+        try entryRepository.create(promptEntry)
+        try entryRepository.create(codeEntry)
+
+        let viewModel = MainWindowViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            entryRepository: entryRepository,
+            settingsRepository: settingsRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            loginItemService: loginItemService,
+            storageMaintenanceService: storageMaintenanceService,
+            updaterService: updaterService,
+            launchRecoveryReport: nil
+        )
+
+        viewModel.load()
+        let loadDeadline = Date().addingTimeInterval(1)
+        while viewModel.entries.count != 2 && Date() < loadDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+
+        viewModel.selectedEntryId = promptEntry.id
+        XCTAssertEqual(viewModel.selectedEntry?.id, promptEntry.id)
+
+        viewModel.toggleEntryKindFilter(.code)
+
+        XCTAssertEqual(viewModel.displayedEntries.map(\.id), [codeEntry.id])
+        XCTAssertEqual(viewModel.selectedEntry?.id, codeEntry.id)
     }
 
     @MainActor
@@ -1282,6 +1400,21 @@ func databaseSeedsDefaultProjectAndCurrentProject() throws {
 }
 
 @Test
+func projectsFetchAllKeepsDefaultProjectFirstThenSortsByName() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let defaultProject = try #require(projectRepository.fetchDefault())
+
+    try projectRepository.create(Project(name: "000 Alpha"))
+    try projectRepository.create(Project(name: "ZZZ Later"))
+
+    let projects = try projectRepository.fetchAll()
+
+    #expect(projects.first?.id == defaultProject.id)
+    #expect(projects.dropFirst().map(\.name) == ["000 Alpha", "ZZZ Later"])
+}
+
+@Test
 func resolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() throws {
     let defaultProjectId = UUID().uuidString
 
@@ -1370,6 +1503,49 @@ func mixedEntriesPreferCurrentProjectWhenSortKeysEqual() throws {
     #expect(result.count == 2)
     #expect(result.first?.projectId == currentProject.id)
     #expect(result.last?.projectId == defaultProject.id)
+}
+
+@Test
+func mixedEntriesUseUpdatedAtAsFinalTieBreaker() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    let currentProject = Project(name: "Current")
+    try projectRepository.create(currentProject)
+
+    let oldDate = Date(timeIntervalSince1970: 1_700_000_000)
+    let newDate = oldDate.addingTimeInterval(60)
+    let oldEntry = Entry(
+        projectId: currentProject.id,
+        title: "Old",
+        content: "old",
+        sortOrder: 0,
+        useCount: 0,
+        lastUsedAt: nil,
+        createdAt: oldDate,
+        updatedAt: oldDate
+    )
+    let newEntry = Entry(
+        projectId: currentProject.id,
+        title: "New",
+        content: "new",
+        sortOrder: 0,
+        useCount: 0,
+        lastUsedAt: nil,
+        createdAt: newDate,
+        updatedAt: newDate
+    )
+    try entryRepository.create(oldEntry)
+    try entryRepository.create(newEntry)
+
+    let result = try entryRepository.fetchMixed(
+        currentProjectId: currentProject.id,
+        defaultProjectId: defaultProject.id
+    )
+
+    #expect(result.map(\.id) == [newEntry.id, oldEntry.id])
 }
 
 @Test
@@ -1695,6 +1871,70 @@ func quickPanelPrepareForPresentationResetsStateAndRequestsFocus() throws {
     #expect(viewModel.focusToken == previousFocusToken + 1)
     #expect(viewModel.isExecutionReady == false)
     #expect(!viewModel.projects.isEmpty)
+}
+
+@MainActor
+@Test
+func mainWindowSelectedEntryFollowsVisibleFilters() async throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let permissionService = PermissionService()
+    let loginItemService = LoginItemService()
+    let updaterService = UpdaterService()
+    let storageMaintenanceService = StorageMaintenanceService(
+        dbQueue: databaseManager.dbQueue,
+        logRepository: logRepository,
+        databaseURL: databaseManager.databaseURL
+    )
+    let appState = AppState()
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+    let promptEntry = Entry(
+        projectId: defaultProject.id,
+        title: "Prompt Entry",
+        content: "prompt",
+        type: Constants.EntryType.prompt.rawValue
+    )
+    let codeEntry = Entry(
+        projectId: defaultProject.id,
+        title: "Code Entry",
+        content: "code",
+        type: Constants.EntryType.code.rawValue
+    )
+    try entryRepository.create(promptEntry)
+    try entryRepository.create(codeEntry)
+
+    let viewModel = MainWindowViewModel(
+        appState: appState,
+        projectRepository: projectRepository,
+        entryRepository: entryRepository,
+        settingsRepository: settingsRepository,
+        logRepository: logRepository,
+        permissionService: permissionService,
+        loginItemService: loginItemService,
+        storageMaintenanceService: storageMaintenanceService,
+        updaterService: updaterService,
+        launchRecoveryReport: nil
+    )
+
+    viewModel.load()
+    let clock = ContinuousClock()
+    let deadline = clock.now + .seconds(1)
+    while viewModel.entries.count != 2 && clock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+
+    viewModel.selectedEntryId = promptEntry.id
+    #expect(viewModel.selectedEntry?.id == promptEntry.id)
+
+    viewModel.toggleEntryKindFilter(.code)
+
+    #expect(viewModel.displayedEntries.map(\.id) == [codeEntry.id])
+    #expect(viewModel.selectedEntry?.id == codeEntry.id)
 }
 
 @MainActor
