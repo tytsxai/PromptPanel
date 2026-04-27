@@ -191,6 +191,14 @@ BUNDLE_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${C
 cp "${BIN_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 chmod 755 "${MACOS_DIR}/${APP_NAME}"
 
+APP_ICON_SRC="${PACKAGE_ROOT}/Sources/PromptPanel/Resources/AppIcon.icns"
+if [[ -f "$APP_ICON_SRC" ]]; then
+    cp "$APP_ICON_SRC" "${RESOURCES_DIR}/AppIcon.icns"
+else
+    echo "AppIcon.icns not found at $APP_ICON_SRC" >&2
+    exit 1
+fi
+
 for bundle_path in "${BIN_DIR}"/*.bundle(N); do
     cp -R "$bundle_path" "${RESOURCES_DIR}/"
 done
