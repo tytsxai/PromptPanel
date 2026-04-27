@@ -7,6 +7,13 @@ protocol AccessibilityPermissionProviding: AnyObject {
     func refresh()
 }
 
+enum AccessibilityResetOutcome: Equatable {
+    case success
+    case missingBundleIdentifier
+    case launchFailed(String)
+    case toolFailed(exitCode: Int32, output: String)
+}
+
 /// Service responsible for detecting and guiding accessibility permission.
 @MainActor
 final class PermissionService: ObservableObject, AccessibilityPermissionProviding {
@@ -37,5 +44,50 @@ final class PermissionService: ObservableObject, AccessibilityPermissionProvidin
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    /// Clear any stale TCC entry tied to a previous binary cdhash.
+    ///
+    /// Why: ad-hoc signed builds get a fresh cdhash on every replacement, so an
+    /// existing Accessibility grant becomes a "ghost" — System Settings shows it
+    /// checked but `AXIsProcessTrusted()` keeps returning false. `tccutil reset`
+    /// drops the entry entirely so the next request creates a clean grant.
+    @discardableResult
+    func resetAccessibilityApproval() -> AccessibilityResetOutcome {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            PPLogger.permission.error("resetAccessibilityApproval: missing bundle identifier")
+            return .missingBundleIdentifier
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleIdentifier]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+        } catch {
+            PPLogger.permission.error("tccutil launch failed: \(error.localizedDescription)")
+            return .launchFailed(error.localizedDescription)
+        }
+
+        process.waitUntilExit()
+
+        let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: outputData, encoding: .utf8) ?? ""
+
+        guard process.terminationStatus == 0 else {
+            PPLogger.permission.error(
+                "tccutil reset Accessibility \(bundleIdentifier) failed (\(process.terminationStatus)): \(output)"
+            )
+            return .toolFailed(exitCode: process.terminationStatus, output: output)
+        }
+
+        PPLogger.permission.info("tccutil reset Accessibility \(bundleIdentifier): \(output.isEmpty ? "ok" : output)")
+        refresh()
+        return .success
     }
 }

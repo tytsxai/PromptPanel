@@ -471,6 +471,14 @@ private struct PermissionSection: View {
                 }
             }
             SettingsRow(
+                label: "重置授权记录",
+                hint: "更新或重装后，若系统里看似已授权但应用仍显示未授权，点这里清空旧记录后再去重新开启。"
+            ) {
+                SettingsPillButton("重置授权", systemImage: "arrow.counterclockwise") {
+                    viewModel.resetAccessibilityApproval()
+                }
+            }
+            SettingsRow(
                 label: "登录时启动",
                 hint: "系统启动后自动在后台运行。"
             ) {

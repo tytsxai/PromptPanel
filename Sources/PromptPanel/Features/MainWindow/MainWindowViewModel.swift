@@ -476,6 +476,26 @@ final class MainWindowViewModel: ObservableObject {
         permissionService.openAccessibilitySettings()
     }
 
+    func resetAccessibilityApproval() {
+        let outcome = permissionService.resetAccessibilityApproval()
+        refreshPermissionState()
+        switch outcome {
+        case .success:
+            bannerMessage = "已清空旧授权记录，请在系统设置里重新开启 PromptPanel.app。"
+        case .missingBundleIdentifier:
+            bannerMessage = "无法读取应用 Bundle ID，重置失败。"
+        case .launchFailed(let reason):
+            bannerMessage = "重置授权记录失败：\(reason)"
+        case .toolFailed(let exitCode, let output):
+            let detail = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if detail.isEmpty {
+                bannerMessage = "tccutil 退出码 \(exitCode)，重置失败。"
+            } else {
+                bannerMessage = "tccutil 退出码 \(exitCode)：\(detail)"
+            }
+        }
+    }
+
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
             if enabled {

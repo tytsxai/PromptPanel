@@ -205,6 +205,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         PPLogger.app.info("Application will terminate")
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Re-check accessibility on focus so the UI tracks grants/revokes the
+        // user just made in System Settings, including the case where a fresh
+        // install left a stale TCC entry that needs `tccutil reset`.
+        guard permissionService != nil else { return }
+        refreshPermissionState()
+        mainWindowViewModel?.refreshPermissionState()
+    }
+
     private func initializeDependencies() throws {
         databaseManager = try DatabaseManager()
         appState = AppState()
