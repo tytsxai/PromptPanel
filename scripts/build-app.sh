@@ -154,6 +154,14 @@ sign_framework_contents() {
     codesign_path "$framework_path"
 }
 
+strip_extended_attributes() {
+    local target_path="$1"
+
+    if command -v xattr >/dev/null 2>&1; then
+        xattr -cr "$target_path" 2>/dev/null || true
+    fi
+}
+
 APP_PATH="${OUTPUT_ROOT}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_PATH}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
@@ -216,6 +224,8 @@ if [[ -n "$(find "$FRAMEWORKS_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; th
         install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${APP_NAME}"
     fi
 fi
+
+strip_extended_attributes "$APP_PATH"
 
 for framework_path in "${FRAMEWORKS_DIR}"/*.framework(N); do
     sign_framework_contents "$framework_path"

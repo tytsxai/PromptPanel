@@ -1406,6 +1406,16 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertTrue(script.contains("Restored database integrity check failed"))
     }
 
+    func testBuildAppStripsExtendedAttributesBeforeSigning() throws {
+        let script = try readRepositoryText("scripts/build-app.sh")
+
+        let stripCallRange = try XCTUnwrap(script.range(of: "strip_extended_attributes \"$APP_PATH\""))
+        let appSignRange = try XCTUnwrap(script.range(of: "codesign_path \"${APP_PATH}\" runtime on"))
+
+        XCTAssertTrue(script.contains("xattr -cr \"$target_path\""))
+        XCTAssertLessThan(stripCallRange.lowerBound, appSignRange.lowerBound)
+    }
+
     private func waitForRecentExecutionLog(
         _ logRepository: LogRepository,
         timeout: TimeInterval = 1
@@ -2665,6 +2675,17 @@ func releaseReadinessExercisesBackupRestoreDrill() throws {
     #expect(script.contains("Verifying backup restore path"))
     #expect(script.contains("\"${REPO_ROOT}/scripts/restore-backup.sh\" --target-dir \"$RESTORE_APP_SUPPORT_DIR\" \"$LATEST_BACKUP_PATH\""))
     #expect(script.contains("Restored database integrity check failed"))
+}
+
+@Test
+func buildAppStripsExtendedAttributesBeforeSigning() throws {
+    let script = try readRepositoryText("scripts/build-app.sh")
+
+    let stripCallRange = try #require(script.range(of: "strip_extended_attributes \"$APP_PATH\""))
+    let appSignRange = try #require(script.range(of: "codesign_path \"${APP_PATH}\" runtime on"))
+
+    #expect(script.contains("xattr -cr \"$target_path\""))
+    #expect(stripCallRange.lowerBound < appSignRange.lowerBound)
 }
 #endif
 
