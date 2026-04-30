@@ -811,6 +811,73 @@ final class PromptPanelTests: XCTestCase {
     }
 
     @MainActor
+    func testMainWindowDisplayedEntriesCacheUpdatesWhenSortModeChanges() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let loginItemService = LoginItemService()
+        let updaterService = UpdaterService()
+        let storageMaintenanceService = StorageMaintenanceService(
+            dbQueue: databaseManager.dbQueue,
+            logRepository: logRepository,
+            databaseURL: databaseManager.databaseURL
+        )
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let alphaEntry = Entry(
+            id: "entry-alpha",
+            projectId: defaultProject.id,
+            title: "Alpha",
+            content: "alpha",
+            useCount: 1,
+            lastUsedAt: now,
+            updatedAt: now
+        )
+        let zetaEntry = Entry(
+            id: "entry-zeta",
+            projectId: defaultProject.id,
+            title: "Zeta",
+            content: "zeta",
+            useCount: 10,
+            lastUsedAt: now,
+            updatedAt: now
+        )
+        try entryRepository.create(alphaEntry)
+        try entryRepository.create(zetaEntry)
+
+        let viewModel = MainWindowViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            entryRepository: entryRepository,
+            settingsRepository: settingsRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            loginItemService: loginItemService,
+            storageMaintenanceService: storageMaintenanceService,
+            updaterService: updaterService,
+            launchRecoveryReport: nil
+        )
+
+        viewModel.load()
+        let loadDeadline = Date().addingTimeInterval(1)
+        while viewModel.displayedEntries.count != 2 && Date() < loadDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+
+        XCTAssertEqual(viewModel.displayedEntries.map(\.id), [zetaEntry.id, alphaEntry.id])
+
+        viewModel.entrySortMode = .alpha
+
+        XCTAssertEqual(viewModel.displayedEntries.map(\.id), [alphaEntry.id, zetaEntry.id])
+    }
+
+    @MainActor
     func testQuickPanelClearsResultsWhileAsyncSearchIsPending() throws {
         let databaseManager = try makeDatabaseManager()
         let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -2038,6 +2105,75 @@ func mainWindowSelectedEntryFollowsVisibleFilters() async throws {
 
     #expect(viewModel.displayedEntries.map(\.id) == [codeEntry.id])
     #expect(viewModel.selectedEntry?.id == codeEntry.id)
+}
+
+@MainActor
+@Test
+func mainWindowDisplayedEntriesCacheUpdatesWhenSortModeChanges() async throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let permissionService = PermissionService()
+    let loginItemService = LoginItemService()
+    let updaterService = UpdaterService()
+    let storageMaintenanceService = StorageMaintenanceService(
+        dbQueue: databaseManager.dbQueue,
+        logRepository: logRepository,
+        databaseURL: databaseManager.databaseURL
+    )
+    let appState = AppState()
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let alphaEntry = Entry(
+        id: "entry-alpha",
+        projectId: defaultProject.id,
+        title: "Alpha",
+        content: "alpha",
+        useCount: 1,
+        lastUsedAt: now,
+        updatedAt: now
+    )
+    let zetaEntry = Entry(
+        id: "entry-zeta",
+        projectId: defaultProject.id,
+        title: "Zeta",
+        content: "zeta",
+        useCount: 10,
+        lastUsedAt: now,
+        updatedAt: now
+    )
+    try entryRepository.create(alphaEntry)
+    try entryRepository.create(zetaEntry)
+
+    let viewModel = MainWindowViewModel(
+        appState: appState,
+        projectRepository: projectRepository,
+        entryRepository: entryRepository,
+        settingsRepository: settingsRepository,
+        logRepository: logRepository,
+        permissionService: permissionService,
+        loginItemService: loginItemService,
+        storageMaintenanceService: storageMaintenanceService,
+        updaterService: updaterService,
+        launchRecoveryReport: nil
+    )
+
+    viewModel.load()
+    let clock = ContinuousClock()
+    let deadline = clock.now + .seconds(1)
+    while viewModel.displayedEntries.count != 2 && clock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+
+    #expect(viewModel.displayedEntries.map(\.id) == [zetaEntry.id, alphaEntry.id])
+
+    viewModel.entrySortMode = .alpha
+
+    #expect(viewModel.displayedEntries.map(\.id) == [alphaEntry.id, zetaEntry.id])
 }
 
 @MainActor

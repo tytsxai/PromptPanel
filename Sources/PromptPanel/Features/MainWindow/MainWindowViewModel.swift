@@ -88,6 +88,7 @@ final class MainWindowViewModel: ObservableObject {
 
     @Published private(set) var projects: [Project] = []
     @Published private(set) var entries: [Entry] = []
+    @Published private(set) var displayedEntries: [Entry] = []
     @Published private(set) var recentExecutionLogs: [ExecutionLog] = []
     @Published private(set) var storageHealthSnapshot: StorageHealthSnapshot?
     @Published private(set) var executionHealthSummary: LogRepository.HealthSummary?
@@ -106,9 +107,21 @@ final class MainWindowViewModel: ObservableObject {
         }
     }
     @Published var selectedEntryId: String?
-    @Published var entryKindFilter: String?
-    @Published var entryTagFilter: String?
-    @Published var entrySortMode: EntrySortMode = .uses
+    @Published var entryKindFilter: String? {
+        didSet {
+            refreshDisplayedEntriesUnlessBatching()
+        }
+    }
+    @Published var entryTagFilter: String? {
+        didSet {
+            refreshDisplayedEntriesUnlessBatching()
+        }
+    }
+    @Published var entrySortMode: EntrySortMode = .uses {
+        didSet {
+            refreshDisplayedEntries()
+        }
+    }
     @Published private(set) var projectEntryCounts: [String: Int] = [:]
     @Published private(set) var totalEntryCount: Int = 0
     @Published var projectDraft: ProjectDraft?
@@ -138,6 +151,7 @@ final class MainWindowViewModel: ObservableObject {
     private let entriesLoadQueue = DispatchQueue(label: "PromptPanel.main-window.entries", qos: .userInitiated)
     private var pendingEntriesRefreshWorkItem: DispatchWorkItem?
     private var entriesRefreshGeneration: Int = 0
+    private var isBatchingEntryFilterUpdate = false
 
     init(
         appState: AppState,
@@ -220,7 +234,7 @@ final class MainWindowViewModel: ObservableObject {
             .map { ($0.key, $0.value) }
     }
 
-    var displayedEntries: [Entry] {
+    private func sortedVisibleEntries() -> [Entry] {
         let filtered: [Entry] = entries.filter { entry in
             if let kind = entryKindFilter, entry.type != kind {
                 return false
@@ -250,6 +264,30 @@ final class MainWindowViewModel: ObservableObject {
                 return compareEntriesByRecencyThenId(lhs, rhs)
             }
         }
+    }
+
+    private func refreshDisplayedEntries() {
+        displayedEntries = sortedVisibleEntries()
+        if let selectedEntryId, displayedEntries.contains(where: { $0.id == selectedEntryId }) == false {
+            self.selectedEntryId = displayedEntries.first?.id
+        } else if selectedEntryId == nil {
+            selectedEntryId = displayedEntries.first?.id
+        }
+    }
+
+    private func refreshDisplayedEntriesUnlessBatching() {
+        guard !isBatchingEntryFilterUpdate else {
+            return
+        }
+        refreshDisplayedEntries()
+    }
+
+    private func updateEntryFilters(kind: String?, tag: String?) {
+        isBatchingEntryFilterUpdate = true
+        entryKindFilter = kind
+        entryTagFilter = tag
+        isBatchingEntryFilterUpdate = false
+        refreshDisplayedEntries()
     }
 
     private func compareEntriesByRecencyThenTitle(_ lhs: Entry, _ rhs: Entry) -> Bool {
@@ -292,25 +330,22 @@ final class MainWindowViewModel: ObservableObject {
 
     func toggleEntryKindFilter(_ type: Constants.EntryType) {
         if entryKindFilter == type.rawValue {
-            entryKindFilter = nil
+            updateEntryFilters(kind: nil, tag: entryTagFilter)
         } else {
-            entryKindFilter = type.rawValue
-            entryTagFilter = nil
+            updateEntryFilters(kind: type.rawValue, tag: nil)
         }
     }
 
     func toggleEntryTagFilter(_ tag: String) {
         if entryTagFilter == tag {
-            entryTagFilter = nil
+            updateEntryFilters(kind: entryKindFilter, tag: nil)
         } else {
-            entryTagFilter = tag
-            entryKindFilter = nil
+            updateEntryFilters(kind: nil, tag: tag)
         }
     }
 
     func clearEntryFilters() {
-        entryKindFilter = nil
-        entryTagFilter = nil
+        updateEntryFilters(kind: nil, tag: nil)
     }
 
     func copyEntryContent(_ entry: Entry) {
@@ -874,15 +909,11 @@ final class MainWindowViewModel: ObservableObject {
                     switch result {
                     case .success(let entries):
                         self.entries = entries
-                        if let current = self.selectedEntryId,
-                           entries.contains(where: { $0.id == current }) == false {
-                            self.selectedEntryId = entries.first?.id
-                        } else if self.selectedEntryId == nil {
-                            self.selectedEntryId = entries.first?.id
-                        }
+                        self.refreshDisplayedEntries()
                     case .failure(let error):
                         PPLogger.entry.error("Failed to load entries: \(error.localizedDescription)")
                         self.entries = []
+                        self.displayedEntries = []
                         self.selectedEntryId = nil
                         self.bannerMessage = "加载词条失败。"
                     }
