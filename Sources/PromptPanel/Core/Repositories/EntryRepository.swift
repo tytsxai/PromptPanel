@@ -32,7 +32,8 @@ final class EntryRepository: @unchecked Sendable {
                     Entry.Columns.sortOrder.desc,
                     Entry.Columns.lastUsedAt.desc,
                     Entry.Columns.useCount.desc,
-                    Entry.Columns.updatedAt.desc
+                    Entry.Columns.updatedAt.desc,
+                    Entry.Columns.id.asc
                 )
                 .fetchAll(db)
         }
@@ -47,7 +48,8 @@ final class EntryRepository: @unchecked Sendable {
                     Entry.Columns.sortOrder.desc,
                     Entry.Columns.lastUsedAt.desc,
                     Entry.Columns.useCount.desc,
-                    Entry.Columns.updatedAt.desc
+                    Entry.Columns.updatedAt.desc,
+                    Entry.Columns.id.asc
                 )
                 .fetchAll(db)
         }
@@ -69,7 +71,8 @@ final class EntryRepository: @unchecked Sendable {
                     entries.last_used_at DESC,
                     entries.use_count DESC,
                     project_priority ASC,
-                    entries.updated_at DESC
+                    entries.updated_at DESC,
+                    entries.id ASC
                 """
             let rows = try Row.fetchAll(db, sql: sql, arguments: [currentProjectId, currentProjectId, defaultProjectId])
             return try rows.map { try Entry(row: $0) }
@@ -118,7 +121,8 @@ final class EntryRepository: @unchecked Sendable {
                     entries.sort_order DESC,
                     entries.last_used_at DESC,
                     entries.use_count DESC\(orderByProjectPriority),
-                    entries.updated_at DESC
+                    entries.updated_at DESC,
+                    entries.id ASC
                 LIMIT 100
                 """
             let rawArguments: [Any] = [currentProjectId as Any, currentProjectId as Any, escapedQuery as Any] + ids.map { $0 as Any }

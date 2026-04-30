@@ -180,6 +180,53 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), [newEntry.id, oldEntry.id])
     }
 
+    func testEntriesUseStableIdTieBreakerAcrossReadPaths() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let laterIdEntry = Entry(
+            id: "tie-b",
+            projectId: defaultProject.id,
+            title: "Tie Sample",
+            content: "stable tie sample",
+            sortOrder: 0,
+            useCount: 0,
+            lastUsedAt: nil,
+            createdAt: now,
+            updatedAt: now
+        )
+        let earlierIdEntry = Entry(
+            id: "tie-a",
+            projectId: defaultProject.id,
+            title: "Tie Sample",
+            content: "stable tie sample",
+            sortOrder: 0,
+            useCount: 0,
+            lastUsedAt: nil,
+            createdAt: now,
+            updatedAt: now
+        )
+        try entryRepository.create(laterIdEntry)
+        try entryRepository.create(earlierIdEntry)
+
+        XCTAssertEqual(try entryRepository.fetchByProject(defaultProject.id).map(\.id), ["tie-a", "tie-b"])
+        XCTAssertEqual(try entryRepository.fetchAll().map(\.id), ["tie-a", "tie-b"])
+        XCTAssertEqual(
+            try entryRepository.fetchMixed(
+                currentProjectId: defaultProject.id,
+                defaultProjectId: defaultProject.id
+            ).map(\.id),
+            ["tie-a", "tie-b"]
+        )
+        XCTAssertEqual(
+            try entryRepository.search(query: "Tie", projectIds: [defaultProject.id]).map(\.id),
+            ["tie-a", "tie-b"]
+        )
+    }
+
     func testMigrateAndDeleteMovesEntriesToTargetProject() throws {
         let databaseManager = try makeDatabaseManager()
         let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -1546,6 +1593,52 @@ func mixedEntriesUseUpdatedAtAsFinalTieBreaker() throws {
     )
 
     #expect(result.map(\.id) == [newEntry.id, oldEntry.id])
+}
+
+@Test
+func entriesUseStableIdTieBreakerAcrossReadPaths() throws {
+    let databaseManager = try makeDatabaseManager()
+    let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+    let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+
+    let defaultProject = try #require(projectRepository.fetchDefault())
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let laterIdEntry = Entry(
+        id: "tie-b",
+        projectId: defaultProject.id,
+        title: "Tie Sample",
+        content: "stable tie sample",
+        sortOrder: 0,
+        useCount: 0,
+        lastUsedAt: nil,
+        createdAt: now,
+        updatedAt: now
+    )
+    let earlierIdEntry = Entry(
+        id: "tie-a",
+        projectId: defaultProject.id,
+        title: "Tie Sample",
+        content: "stable tie sample",
+        sortOrder: 0,
+        useCount: 0,
+        lastUsedAt: nil,
+        createdAt: now,
+        updatedAt: now
+    )
+    try entryRepository.create(laterIdEntry)
+    try entryRepository.create(earlierIdEntry)
+
+    #expect(try entryRepository.fetchByProject(defaultProject.id).map(\.id) == ["tie-a", "tie-b"])
+    #expect(try entryRepository.fetchAll().map(\.id) == ["tie-a", "tie-b"])
+    #expect(
+        try entryRepository.fetchMixed(
+            currentProjectId: defaultProject.id,
+            defaultProjectId: defaultProject.id
+        ).map(\.id) == ["tie-a", "tie-b"]
+    )
+    #expect(
+        try entryRepository.search(query: "Tie", projectIds: [defaultProject.id]).map(\.id) == ["tie-a", "tie-b"]
+    )
 }
 
 @Test
