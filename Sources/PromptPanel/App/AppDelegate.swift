@@ -236,12 +236,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             databaseURL: databaseManager.databaseURL
         )
 
-        let defaultProject = try projectRepository.fetchDefault()
+        let initializedProjectRepository = projectRepository!
+        let defaultProject = try initializedProjectRepository.fetchDefault()
         let currentProjectResolution = try Self.resolveCurrentProjectSelection(
             persistedCurrentProjectId: try settingsRepository.getCurrentProjectId(),
             defaultProjectId: defaultProject?.id,
-            currentProjectExists: { [projectRepository] projectId in
-                try projectRepository.fetchById(projectId) != nil
+            currentProjectExists: { projectId in
+                try initializedProjectRepository.fetchById(projectId) != nil
             }
         )
         if currentProjectResolution.needsPersistence, let repairedProjectId = currentProjectResolution.projectId {

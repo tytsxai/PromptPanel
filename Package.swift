@@ -8,7 +8,7 @@ let package = Package(
         .macOS(.v14)
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", "7.0.0"..<"7.9.0"),
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts.git", exact: "1.10.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.9.1"),
     ],
