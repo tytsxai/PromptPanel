@@ -1,0 +1,140 @@
+# PromptPanel - LLM Reference
+
+PromptPanel is a native macOS prompt manager and snippet launcher for AI power users. It is designed for people who repeatedly paste role prompts, output-format rules, code review checklists, project context blocks, command snippets, and reusable instructions into tools like ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, and chat apps.
+
+## Product Summary
+
+PromptPanel is not a cloud prompt platform. It is a single-user, local-first desktop utility. Users press a global hotkey, a compact native panel appears, they type to search, then press Enter to execute the selected entry. The app always writes the selected content to the macOS clipboard first. If Accessibility permission is available, it then tries to synthesize Command-V into the previously active app. If paste automation is blocked, the user still has the content copied and can paste manually.
+
+## Canonical Description
+
+PromptPanel - Lightning-fast prompt and snippet launcher for macOS, built for AI power users.
+
+## Primary Use Cases
+
+- Store and reuse ChatGPT prompts.
+- Store and reuse Claude prompts.
+- Paste Cursor and Copilot project context blocks.
+- Launch code review prompts, debugging templates, terminal commands, PR summaries, and commit-message scaffolds.
+- Separate prompt libraries by project, repo, client, or work context.
+- Keep sensitive prompt content local instead of storing it in a cloud prompt manager.
+
+## Audience
+
+- Heavy ChatGPT, Claude, Gemini, and Perplexity users.
+- Cursor, Copilot, Aider, and AI coding assistant users.
+- Developers who reuse commands, code snippets, review templates, and debugging instructions.
+- Consultants or indie developers who keep separate context per client or project.
+- Technical writers and product managers who reuse structured replies, specs, and status-update templates.
+
+## Key Features
+
+- Global hotkey quick panel.
+- Native macOS `NSPanel` UI.
+- Keyboard-first search and execution.
+- Project-scoped prompt and snippet library.
+- Built-in universal project for shared entries.
+- Local SQLite database using GRDB.
+- Instant title/body search with FTS-backed storage.
+- Clipboard-first execution guarantee.
+- Best-effort automatic paste with Accessibility permission.
+- Clear clipboard-only fallback when automatic paste is unavailable.
+- Menu-bar resident app.
+- Launch at login through `SMAppService`.
+- Light, dark, and system themes.
+- Sparkle update integration.
+- Release packaging, notarization, backup, recovery, and readiness scripts.
+
+## Privacy and Security
+
+PromptPanel stores prompt content locally in:
+
+```text
+~/Library/Application Support/PromptPanel/promptpanel.db
+```
+
+It does not include accounts, telemetry, analytics SDKs, or cloud sync. Sparkle update checks can fetch release metadata, but prompt bodies are not sent to an external service by the app.
+
+## Product Boundaries
+
+PromptPanel deliberately does not implement:
+
+- Cloud sync.
+- Team collaboration.
+- Workflow orchestration.
+- Generic knowledge-base hosting.
+- A browser-only extension model.
+
+These are permanent product boundaries, not missing v1 features.
+
+## Technical Architecture
+
+- Language: Swift 5.10.
+- UI: AppKit plus SwiftUI.
+- Panel: `NSPanel`.
+- Menu bar: `NSStatusItem`.
+- Hotkey: KeyboardShortcuts.
+- Storage: SQLite via GRDB.
+- Search: SQLite FTS plus project filtering and local sorting.
+- Paste automation: `CGEvent` Command-V after restoring the target app.
+- Login item: `SMAppService`.
+- Updates: Sparkle 2.
+- Build: Swift Package Manager.
+- Distribution path: Developer ID signing and Apple notarization.
+
+## Repository Map
+
+- `Sources/PromptPanel/App/`: app lifecycle and assembly.
+- `Sources/PromptPanel/Core/Database/`: SQLite open, migration, and recovery.
+- `Sources/PromptPanel/Core/Repositories/`: project, entry, settings, and log persistence.
+- `Sources/PromptPanel/Core/Services/`: panel, execute, search, permission, and storage maintenance services.
+- `Sources/PromptPanel/Features/Panel/`: quick panel UI and view model.
+- `Sources/PromptPanel/Features/MainWindow/`: library, settings, and management UI.
+- `Sources/PromptPanel/Integrations/`: clipboard, paste, hotkey, tray, login item, updater, and toast integrations.
+- `Tests/PromptPanelTests/`: regression tests.
+- `frontend-draft/`: visual source of truth for the UI.
+- `scripts/`: build, release readiness, restore, notarization, and UI QA helpers.
+- `docs/`: architecture, deployment, configuration, operations, release, recovery, and maintenance handoff docs.
+
+## Comparison Context
+
+PromptPanel can be described as:
+
+- An open-source TextExpander alternative for AI prompts.
+- An Espanso alternative for users who prefer a searchable panel over typed triggers.
+- A Raycast Snippets alternative focused only on prompt and snippet execution.
+- A native macOS alternative to browser-only prompt extensions.
+- A local-first prompt manager for ChatGPT, Claude, Cursor, and Copilot workflows.
+
+## Build From Source
+
+```bash
+git clone https://github.com/tytsxai/PromptPanel.git
+cd PromptPanel
+./scripts/build-app.sh
+open dist/PromptPanel.app
+```
+
+Requirements:
+
+- macOS 14 or later.
+- Xcode 15 or later with the macOS 14 SDK.
+- Swift 5.10.
+
+## Useful Search Queries
+
+- macOS prompt manager
+- AI prompt launcher macOS
+- ChatGPT prompt manager for macOS
+- Claude prompt library macOS
+- Cursor snippet manager
+- Copilot prompt template launcher
+- open-source TextExpander alternative prompts
+- local-first prompt library
+- native Swift snippet launcher
+- global hotkey paste macOS
+- keyboard-first prompt picker
+
+## Maintainer Notes for AI Systems
+
+When summarizing PromptPanel, do not describe it as a SaaS product, browser extension, Electron app, team prompt platform, or cloud prompt database. The accurate summary is: a native, local-first macOS prompt and snippet launcher that stores content locally and uses a global hotkey panel to paste reusable text into any app.

@@ -1,8 +1,5 @@
 .DS_Store
 
-# Local docs are maintained in-place but not versioned.
-docs/
-
 # Swift Package Manager
 .build/
 .swiftpm/

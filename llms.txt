@@ -1,0 +1,50 @@
+# PromptPanel
+
+> Lightning-fast prompt and snippet launcher for macOS, built for AI power users.
+
+PromptPanel is an open-source native macOS prompt manager and snippet launcher. It lets users press a global hotkey, search a local prompt library, and paste reusable prompts, code snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.
+
+Core positioning:
+
+- Native macOS app, written in Swift with AppKit and SwiftUI.
+- Local-first prompt library stored in SQLite.
+- No accounts, no telemetry, no cloud sync for prompt content.
+- Global hotkey quick panel built around the loop: hotkey -> search -> Enter -> paste.
+- Clipboard write is the guarantee; automatic paste is best-effort and requires Accessibility permission.
+- Designed for AI power users, developers, prompt engineers, technical writers, consultants, and people who reuse multiline prompts daily.
+- MIT licensed open-source project.
+
+Important links:
+
+- README: ./README.md
+- Chinese README: ./README.zh-CN.md
+- FAQ: ./FAQ.md
+- Changelog: ./CHANGELOG.md
+- Contributing: ./CONTRIBUTING.md
+- Security: ./SECURITY.md
+- Product PRD: ./项目快贴-PRD.md
+- Documentation index: ./docs/README.md
+- Architecture: ./docs/架构说明.md
+- Deployment: ./docs/部署说明.md
+- Operations and troubleshooting: ./docs/运维与排错指南.md
+- Technical decisions: ./docs/技术选型.md
+- Full LLM context: ./llms-full.txt
+
+Canonical repository:
+
+- https://github.com/tytsxai/PromptPanel
+
+Useful search phrases:
+
+- macOS prompt manager
+- AI prompt launcher for macOS
+- ChatGPT prompt manager macOS
+- Claude prompt library
+- Cursor snippet manager
+- open-source TextExpander alternative
+- Espanso alternative for AI prompts
+- Raycast snippets alternative
+- local-first prompt library
+- native Swift NSPanel app
+- global hotkey paste macOS
+- keyboard-first prompt picker

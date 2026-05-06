@@ -1,0 +1,322 @@
+<div align="center">
+
+<img src="Sources/PromptPanel/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" alt="PromptPanel — macOS prompt and snippet launcher" width="128" height="128" />
+
+# PromptPanel
+
+### Lightning-fast prompt & snippet launcher for macOS, built for AI power users.
+
+A native, local-first macOS app that lets you summon a quick panel with a global hotkey, search your **prompt library**, and paste into **ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, or any text field**.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform: macOS 14+](https://img.shields.io/badge/Platform-macOS%2014%2B-lightgrey.svg)](https://www.apple.com/macos)
+[![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange.svg)](https://swift.org)
+[![Apple Silicon & Intel](https://img.shields.io/badge/Arch-Apple%20Silicon%20%26%20Intel-blue.svg)](#installation)
+[![Local-first · No cloud](https://img.shields.io/badge/Local--first-No%20cloud-brightgreen.svg)](#privacy--data)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-success.svg)](CONTRIBUTING.md)
+
+[**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**FAQ**](FAQ.md) · [**Docs**](docs/README.md) · [**LLM index**](llms.txt) · [**Changelog**](CHANGELOG.md) · [**Contributing**](CONTRIBUTING.md)
+
+<img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel summoned over a text editor — search and paste prompts in milliseconds" width="780" />
+
+</div>
+
+---
+
+## What is PromptPanel?
+
+**PromptPanel** is an open-source, **native macOS prompt manager** and snippet launcher designed for the way AI power users actually work. Press a global hotkey from anywhere — ChatGPT, Claude, Cursor, VS Code, your terminal, your browser — and a lightweight panel slides in. Type a few characters, hit `Enter`, and the entry lands in your current input box. No account. No cloud. No syncing service. Everything stays on your Mac.
+
+If you've been hunting for an **AI prompt library**, a **TextExpander alternative for prompts**, an **open-source snippet launcher for macOS**, or a way to stop pasting the same instructions into Claude and ChatGPT a hundred times a day — that is exactly what PromptPanel does.
+
+## Why PromptPanel?
+
+Most "prompt managers" are either browser extensions (locked to one site), or generic snippet tools that weren't built for the AI workflow. PromptPanel is purpose-built around one short loop:
+
+> **hotkey → search → enter → content lands in the active input field**
+
+Everything else is in service of making that loop fast, predictable, and never lossy.
+
+| You want… | PromptPanel gives you |
+|---|---|
+| A prompt library that works **across every app**, not just one website | Global hotkey, native macOS panel, works in any text field |
+| **Speed** — sub-second from keypress to typing | < 300 ms hotkey-to-focus target, < 100 ms search refresh target, < 250 ms execution target |
+| **Project isolation** so client A's prompts don't leak into client B | First-class projects + a built-in `Universal` project for shared content |
+| **No cloud lock-in** for sensitive prompts | Local SQLite. Zero network calls for core features. Your data is a single file you own |
+| **Auto-paste that doesn't silently fail** | Auto-paste first, clipboard fallback always — and a clear toast if paste was blocked |
+| **Keyboard-only operation** | Summon → type → arrow-keys → Enter. Mouse never required |
+| Open source you can audit, fork, and trust | MIT license, plain Swift, no telemetry |
+
+## Who is it for?
+
+- **Heavy ChatGPT / Claude / Gemini users** who reuse the same role definitions, output-format constraints, and context blocks
+- **Cursor / Copilot / Aider users** who paste the same architecture summaries and review checklists
+- **Developers** who repeatedly type commit-message scaffolds, code review templates, terminal commands, error-triage snippets
+- **Indie hackers and consultants** juggling multiple client projects with different style guides and tone-of-voice rules
+- **Technical writers and PMs** who maintain reusable replies, status updates, and spec scaffolds
+
+If "I copy and paste the same multiline prompt twenty times a day" describes you, this tool was written for you.
+
+## Features
+
+### Core (v0.1)
+
+- 🔥 **Global hotkey** — summon the panel from any foreground app, configurable shortcut
+- ⚡ **< 300 ms time-to-input** — `NSPanel`-based, no Electron, no web runtime, no cold start
+- 🔍 **Instant search** across title and body, no submit step
+- 🗂️ **Projects** — isolate prompts per client, repo, or context; `Universal` project always visible
+- 📋 **Auto-paste with clipboard fallback** — uses `CGEvent` to send ⌘V, falls back gracefully if Accessibility permission is missing
+- 🎯 **Keyboard-first** — arrow keys to navigate, Enter to execute, Esc to dismiss
+- 📌 **Pin & sort** — pin frequent entries, manual sort, then by recency, then by usage count
+- 🌗 **Light / dark / system** theme
+- 🪶 **Menu-bar resident** — out of the way until you summon it
+- 🚀 **Launch at login** via `SMAppService`
+- 🔐 **Permission-aware degradation** — without Accessibility, you still get one-key copy and a clear UI hint
+- 📝 **Multiline content** — full template bodies, no length limit on storage
+- 📊 **Execution log** for diagnosing paste failures
+- 🔄 **Auto-update** via Sparkle (you can disable it)
+
+### Explicitly *not* doing (project boundaries)
+
+By design PromptPanel will **never** add cloud sync, team collaboration, or complex workflow orchestration. These are not "later" — they are out of scope forever. The tool is a single-user, local-only utility, and that is the point. See [PRD §4.2](项目快贴-PRD.md) for the rationale.
+
+## Screenshots
+
+| Quick Panel | Library |
+|:---:|:---:|
+| <img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel showing prompt entries with project filter" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-library.png" alt="PromptPanel main library view with projects and entry editor" width="380"/> |
+| Compact mode | Settings |
+| <img src="frontend-draft/uploads/PromptPanel-panel-min.png" alt="PromptPanel compact mini panel" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-settings.png" alt="PromptPanel settings — hotkey, theme, paste behavior, launch at login" width="380"/> |
+
+## How does it work?
+
+```
+   ┌──────────────┐    hotkey     ┌──────────────┐    select    ┌──────────────┐
+   │  any app     │  ──────────►  │ PromptPanel  │  ──────────► │  clipboard   │
+   │ (ChatGPT,    │   (global)    │  NSPanel     │   (Enter)    │   (write)    │
+   │  Claude,     │               │              │              └──────┬───────┘
+   │  Cursor…)    │ ◄──────────── │              │                     │
+   └──────────────┘  paste / focus└──────────────┘                     │
+          ▲                         restored                            │
+          └────────── CGEvent ⌘V (Accessibility permission) ◄───────────┘
+                          fallback: clipboard only + toast
+```
+
+1. You press the configured hotkey (`KeyboardShortcuts` library captures it system-wide).
+2. PromptPanel snaps an `NSPanel` over the active window, focuses the search field, and shows entries from the current project plus the `Universal` project, sorted by pin → manual → recency → usage count.
+3. You type to filter (live, no submit), arrow to choose, press `Enter`.
+4. The selected content is **always** written to the system clipboard first (this is the guarantee — clipboard never silently fails).
+5. The panel hides, the previous app regains focus, and PromptPanel synthesizes a `⌘V` via `CGEvent`. If Accessibility permission is missing or the target app blocks synthetic events, a toast tells you "Copied — press ⌘V to paste."
+6. Execution is logged locally so you can diagnose any per-app paste issue later.
+
+This separation — **clipboard as guarantee, auto-paste as best-effort** — is the single most important design decision in the project.
+
+## Installation
+
+> **System requirement:** macOS 14 (Sonoma) or later. Apple Silicon and Intel both supported.
+
+### Option A — Build from source (current path while pre-release)
+
+```bash
+# 1. Clone
+git clone https://github.com/tytsxai/PromptPanel.git
+cd PromptPanel
+
+# 2. Build the .app bundle (signed ad-hoc by default)
+./scripts/build-app.sh
+
+# 3. Move it into Applications (or run from dist/)
+open dist/PromptPanel.app
+```
+
+Requirements for building:
+
+- Xcode 15+ with the macOS 14 SDK
+- Swift 5.10 toolchain (`xcrun swift --version`)
+
+### Option B — Signed & notarized release
+
+Once a tagged release is published, a notarized `.dmg` will be attached. Until then, build locally — it takes ~30 seconds on Apple Silicon.
+
+### First-run setup
+
+1. **Grant Accessibility permission** when prompted. macOS uses this to allow synthetic `⌘V` keystrokes. Without it, PromptPanel still copies to clipboard reliably; you just paste manually.
+2. **Set your hotkey** in Settings → Hotkey. The current default is `⌥2`; pick another shortcut if it conflicts with your setup.
+3. **Create a project** or start adding entries to `Universal`.
+
+## Quick start
+
+```text
+1. ⌥2              → panel appears, search field focused
+2. type "review"   → filters to your code-review prompt
+3. ↵               → content pasted into the active text field
+4. (panel hides)   → keep working
+```
+
+You can switch the active project from inside the panel without opening the main window — keyboard-only, no detour.
+
+## Configuration
+
+| Setting | Where | Notes |
+|---|---|---|
+| Global hotkey | Settings → Hotkey | One shortcut. Toggle behavior: same key dismisses |
+| Theme | Settings → Appearance | Light / dark / follow system |
+| Launch at login | Settings → General | Uses `SMAppService` |
+| Auto-update | Settings → Updates | Powered by Sparkle 2; can be disabled |
+| Database location | `~/Library/Application Support/PromptPanel/promptpanel.db` | Single-file SQLite, easy to back up |
+| Logs | `~/Library/Logs/PromptPanel/` | Inspected via the main window's "Runtime Health" |
+
+## Privacy & data
+
+- **Local-first by definition.** Your prompts live in a single SQLite file on your Mac. The app does not POST your content anywhere.
+- **No telemetry.** No analytics SDKs, no metrics endpoints, no crash reporting service.
+- **Network access** is limited to Sparkle's update check (a single signed-feed fetch, opt-out in Settings).
+- **No accounts.** There is nothing to sign in to.
+- **Open source.** Audit `Sources/PromptPanel/Core/` to verify any of the above.
+
+If your prompts contain proprietary information — internal architecture, client briefs, NDA-bound context — this is exactly the property you want.
+
+## How does PromptPanel compare to alternatives?
+
+> Quick orientation, not a takedown. These tools are good at what they do.
+
+| | **PromptPanel** | TextExpander | Espanso | Raycast Snippets | Alfred Snippets | Browser prompt extensions |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Open source | ✅ MIT | ❌ | ✅ GPLv3 | Partial | ❌ | varies |
+| macOS native (no Electron / web runtime) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Works in any app (not just browser) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Quick-search panel UI (not just trigger strings) | ✅ | partial | ❌ | ✅ | ✅ | varies |
+| Project / context isolation | ✅ first-class | groups | folders | folders | folders | rare |
+| Keyboard-only flow | ✅ | partial | ✅ | ✅ | ✅ | varies |
+| Local-only / no cloud option | ✅ default | optional, paid tiers nudge cloud | ✅ | account required | ✅ | usually cloud |
+| Free | ✅ | $$$ | ✅ | freemium | requires Powerpack | varies |
+| Built specifically around AI prompt workflow | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ but browser-only |
+
+**TL;DR:** if you live in the browser only, a browser extension is fine. If you live in Cursor/VS Code/Terminal/Slack/everywhere, you want something native and panel-based. Among native panel-based options, PromptPanel is the open-source, AI-prompt-shaped one.
+
+## Tech stack
+
+- **Language:** Swift 5.10
+- **UI:** AppKit (`NSPanel`, `NSStatusItem`) + SwiftUI
+- **Storage:** SQLite via [GRDB.swift](https://github.com/groue/GRDB.swift)
+- **Hotkey:** [sindresorhus/KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) (Carbon Hot Key under the hood)
+- **Auto-paste:** `CGEvent` synthesizing ⌘V after focus restoration
+- **Login item:** `SMAppService`
+- **Updater:** [Sparkle 2](https://sparkle-project.org/)
+- **Distribution:** Developer ID + Apple notarization (no Mac App Store)
+- **Build:** Swift Package Manager — no Xcode project required
+
+See [docs/技术选型.md](docs/技术选型.md) for the full decision log.
+
+## Project layout
+
+```
+PromptPanel/
+├── Sources/PromptPanel/
+│   ├── App/              # AppDelegate, AppState, lifecycle
+│   ├── Core/
+│   │   ├── Database/     # SQLite open / migrate / recover
+│   │   ├── Repositories/ # Project, Entry, Settings, Log
+│   │   ├── Services/     # PanelService, ExecuteService, SearchService…
+│   │   ├── Diagnostics/  # Hotkey-to-focus timing
+│   │   └── Utils/
+│   ├── Integrations/     # Clipboard, Paste (CGEvent), Tray, Hotkey, Updater
+│   ├── Features/
+│   │   ├── Panel/        # QuickPanelView + ViewModel — the hero feature
+│   │   └── MainWindow/   # Library + Settings
+│   └── Resources/        # Info.plist, entitlements, AppIcon, Assets
+├── Tests/PromptPanelTests/
+├── frontend-draft/       # UI source-of-truth (HTML/JSX mockups + screenshots)
+├── scripts/              # build-app.sh, notarize, release readiness, restore
+├── docs/                 # public architecture, release, ops, and handoff docs
+├── llms.txt              # short AI-search / LLM-readable project index
+├── llms-full.txt         # expanded LLM reference for answer engines
+└── .github/workflows/    # macOS release readiness CI
+```
+
+## Documentation
+
+The public documentation set is part of the repository:
+
+- [Documentation index](docs/README.md)
+- [Architecture](docs/架构说明.md)
+- [Core modules and logic](docs/关键模块与核心逻辑.md)
+- [Configuration](docs/配置说明.md)
+- [Deployment](docs/部署说明.md)
+- [Operations and troubleshooting](docs/运维与排错指南.md)
+- [Release and recovery](docs/生产发布与恢复手册.md)
+- [AI search and discoverability](docs/ai-search-discoverability.md)
+
+For answer engines and repository-aware AI tools, start with [llms.txt](llms.txt) or the expanded [llms-full.txt](llms-full.txt).
+
+## Roadmap
+
+PromptPanel follows a **deliberately small** roadmap. The PRD lists items that are explicitly off the table forever (cloud sync, teams, workflow orchestration). Within scope:
+
+- [x] v0.1 — main link complete: hotkey → search → execute, projects, clipboard fallback, light/dark, login item, Sparkle, signing & notarization scripts
+- [ ] One-tap "repeat last entry"
+- [ ] JSON / Markdown import & export
+- [ ] Variable templates (`{{name}}` style) — only if it can be added without slowing the main link
+
+See [CHANGELOG.md](CHANGELOG.md) for what's shipped and [issues](https://github.com/tytsxai/PromptPanel/issues) for what's planned.
+
+## Frequently asked questions
+
+For a longer FAQ, see [FAQ.md](FAQ.md). The greatest hits:
+
+### Is PromptPanel free?
+
+Yes. MIT license. No paid tier, no usage cap, no account.
+
+### Does it work with Apple Silicon (M1/M2/M3/M4)?
+
+Yes — it builds as a universal binary. Tested on both Apple Silicon and Intel macOS 14+.
+
+### Does it send my prompts anywhere?
+
+No. The only network call is the Sparkle update feed, which fetches release metadata only and can be turned off in Settings. Your prompt content never leaves your Mac.
+
+### Why does it ask for Accessibility permission?
+
+To synthesize a `⌘V` keystroke after the panel hides and your previous app regains focus. Without this permission the app still works — it just stops at the clipboard step and shows you a "press ⌘V to paste" toast.
+
+### Will you add cloud sync / team sharing / workflows?
+
+No, deliberately. Those are listed as **permanent non-goals** in the [PRD §4.2](项目快贴-PRD.md). The product's identity is "single-user, local-only, fast." Adding any of those would change what the product is.
+
+### Why not Electron / Tauri?
+
+The hottest paths in this product (global hotkey timing, focus restoration, synthetic keystroke injection, accessibility permission flow) are macOS system-integration concerns. A cross-platform shell adds latency and indirection without buying any features that matter for this product. See [docs/技术选型.md](docs/技术选型.md) for the full reasoning.
+
+### How do I report a bug or request a feature?
+
+Open an issue: <https://github.com/tytsxai/PromptPanel/issues>. Please use the templates — they'll save us both round-trips.
+
+### How do I import my existing prompts from another tool?
+
+Import is on the roadmap; for now you can write directly to the SQLite file or paste entries into the main window. PRs that add a clean importer for TextExpander / Espanso / Raycast format are very welcome.
+
+## Contributing
+
+PRs welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) first. Two non-obvious rules:
+
+1. **UI changes must align with `frontend-draft/`.** That directory is the source of truth for visuals; don't ship a Swift view that contradicts the JSX mockup.
+2. **Stay inside the PRD's scope.** If a proposal would push the product toward cloud / teams / workflows, it's a "no" regardless of how well-implemented it is. This isn't gatekeeping — it's the reason the tool is fast and trustworthy.
+
+## Acknowledgments
+
+PromptPanel stands on:
+
+- [GRDB.swift](https://github.com/groue/GRDB.swift) by Gwendal Roué
+- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus
+- [Sparkle](https://github.com/sparkle-project/Sparkle) by the Sparkle team
+
+…and the broader Swift / AppKit community whose docs and Stack Overflow answers made the system-integration paths possible.
+
+## License
+
+[MIT](LICENSE) © 2026 tytsxai and PromptPanel contributors.
+
+---
+
+<sub>**Keywords** (so you can actually find this when you search): macOS prompt manager · AI prompt launcher · ChatGPT prompt manager macOS · Claude prompt library · Cursor snippet manager · open-source TextExpander alternative · Espanso alternative · Raycast snippets alternative · global hotkey paste macOS · local-first prompt library · native Swift NSPanel app · AI workflow productivity tool · prompt template manager macOS · snippet launcher macOS · keyboard-first prompt picker.</sub>
