@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 @testable import PromptPanel
 import KeyboardShortcuts
 
@@ -12,6 +13,112 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(Constants.defaultProjectName, "通用项目")
         XCTAssertEqual(Constants.panelWindowSize.width, Constants.panelContentSize.width + Constants.panelContentInsets.left + Constants.panelContentInsets.right)
         XCTAssertEqual(Constants.panelWindowSize.height, Constants.panelContentSize.height + Constants.panelContentInsets.top + Constants.panelContentInsets.bottom)
+    }
+
+    func testEntryLevelResolvesBoundaries() {
+        // Locks the leveling thresholds so future churn doesn't silently
+        // shift the visual tiers (rookie → master) users see in the UI.
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: -5), .rookie)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 0),   .rookie)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 1),   .bronze)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 3),   .bronze)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 4),   .silver)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 9),   .silver)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 10),  .gold)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 24),  .gold)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 25),  .platinum)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 59),  .platinum)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 60),  .diamond)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 149), .diamond)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 150), .master)
+        XCTAssertEqual(Constants.EntryLevel.resolve(useCount: 9999), .master)
+    }
+
+    func testEntrySortModeRoundTripsThroughSettings() throws {
+        // The sort dropdown writes through SettingsRepository; on next launch
+        // MainWindowViewModel hydrates from it. Lock the round-trip so a typo
+        // in the SettingsKey or rawValue can't silently reset users to .uses.
+        let databaseManager = try makeDatabaseManager()
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+
+        XCTAssertNil(try settingsRepository.getEntrySortMode())
+        XCTAssertEqual(MainWindowViewModel.EntrySortMode.resolve(nil), .uses)
+
+        try settingsRepository.setEntrySortMode(MainWindowViewModel.EntrySortMode.byLevel.rawValue)
+        let stored = try settingsRepository.getEntrySortMode()
+        XCTAssertEqual(MainWindowViewModel.EntrySortMode.resolve(stored), .byLevel)
+
+        // Garbage values fall back to default rather than crashing.
+        XCTAssertEqual(MainWindowViewModel.EntrySortMode.resolve("not_a_mode"), .uses)
+    }
+
+    @MainActor
+    func testByLevelSortGroupsEntriesByTierThenUseCount() throws {
+        // .byLevel is the "color blocks group together" mode: entries in the
+        // same EntryLevel tier sit adjacent regardless of exact useCount, with
+        // higher tiers first. .uses, by contrast, is strictly numeric.
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let loginItemService = LoginItemService()
+        let updaterService = UpdaterService()
+        let storageMaintenanceService = StorageMaintenanceService(
+            dbQueue: databaseManager.dbQueue,
+            logRepository: logRepository,
+            databaseURL: databaseManager.databaseURL
+        )
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let earlier = now.addingTimeInterval(-86_400)
+        // Two gold-tier entries (10–24 uses) and one platinum (25–59). The gold
+        // pair has a higher count on the *older* entry — this is what makes the
+        // .uses vs .byLevel distinction observable.
+        let goldHigh = Entry(id: "gold-high", projectId: defaultProject.id, title: "Gold High", content: "x", useCount: 24, lastUsedAt: earlier, updatedAt: earlier)
+        let goldLow = Entry(id: "gold-low", projectId: defaultProject.id, title: "Gold Low", content: "x", useCount: 10, lastUsedAt: now, updatedAt: now)
+        let platinum = Entry(id: "platinum", projectId: defaultProject.id, title: "Platinum", content: "x", useCount: 25, lastUsedAt: earlier, updatedAt: earlier)
+        try entryRepository.create(goldHigh)
+        try entryRepository.create(goldLow)
+        try entryRepository.create(platinum)
+
+        let viewModel = MainWindowViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            entryRepository: entryRepository,
+            settingsRepository: settingsRepository,
+            logRepository: logRepository,
+            permissionService: permissionService,
+            loginItemService: loginItemService,
+            storageMaintenanceService: storageMaintenanceService,
+            updaterService: updaterService,
+            launchRecoveryReport: nil
+        )
+
+        viewModel.load()
+        let loadDeadline = Date().addingTimeInterval(1)
+        while viewModel.displayedEntries.count != 3 && Date() < loadDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+
+        // .uses: strictly by number → 25 > 24 > 10. Recency is only a tiebreak.
+        XCTAssertEqual(viewModel.displayedEntries.map(\.id), [platinum.id, goldHigh.id, goldLow.id])
+
+        viewModel.entrySortMode = .byLevel
+        // .byLevel: platinum (highest tier) first, then within the gold tier
+        // the *more recent* entry wins — even though goldHigh has 24 uses vs
+        // goldLow's 10, goldLow was used more recently.
+        XCTAssertEqual(viewModel.displayedEntries.map(\.id), [platinum.id, goldLow.id, goldHigh.id])
+
+        // Persistence side-effect: didSet should have written the new mode.
+        XCTAssertEqual(
+            MainWindowViewModel.EntrySortMode.resolve(try settingsRepository.getEntrySortMode()),
+            .byLevel
+        )
     }
 
     func testDatabaseSeedsDefaultProjectAndCurrentProject() throws {
@@ -91,6 +198,16 @@ final class PromptPanelTests: XCTestCase {
 
         try settingsRepository.setPanelContentSize(NSSize(width: 2000, height: 100))
         XCTAssertEqual(try settingsRepository.getPanelContentSize(), NSSize(width: Constants.panelMaxContentSize.width, height: Constants.panelMinContentSize.height))
+    }
+
+    func testPanelWindowOriginSettingRoundTrips() throws {
+        let databaseManager = try makeDatabaseManager()
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+
+        XCTAssertNil(try settingsRepository.getPanelWindowOrigin())
+
+        try settingsRepository.setPanelWindowOrigin(NSPoint(x: 321.4, y: 456.6))
+        XCTAssertEqual(try settingsRepository.getPanelWindowOrigin(), NSPoint(x: 321, y: 457))
     }
 
     func testMixedEntriesPreferCurrentProjectWhenSortKeysEqual() throws {
@@ -928,6 +1045,74 @@ final class PromptPanelTests: XCTestCase {
     }
 
     @MainActor
+    func testQuickPanelPointerClickExecutesVisibleEntryImmediately() throws {
+        let databaseManager = try makeDatabaseManager()
+        let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
+        let entryRepository = EntryRepository(dbQueue: databaseManager.dbQueue)
+        let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+        let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+        let permissionService = PermissionService()
+        let appState = AppState()
+        let defaultProject = try XCTUnwrap(projectRepository.fetchDefault())
+        appState.loadPersistedState(currentProjectId: defaultProject.id, defaultProjectId: defaultProject.id)
+
+        let firstEntry = Entry(
+            id: "entry-first",
+            projectId: defaultProject.id,
+            title: "First",
+            content: "first body",
+            sortOrder: 20
+        )
+        let secondEntry = Entry(
+            id: "entry-second",
+            projectId: defaultProject.id,
+            title: "Second",
+            content: "second body",
+            sortOrder: 10
+        )
+        try entryRepository.create(firstEntry)
+        try entryRepository.create(secondEntry)
+
+        let pasteDispatcher = FakePasteDispatcher(result: .dispatched)
+        let executeService = ExecuteService(
+            clipboardService: FakeClipboardWriter(success: true),
+            pasteService: pasteDispatcher,
+            entryRepository: entryRepository,
+            logRepository: logRepository,
+            permissionService: FakePermissionProvider(isAccessibilityGranted: true),
+            targetApplicationProvider: { nil },
+            currentFrontApplicationProvider: { nil }
+        )
+
+        let viewModel = QuickPanelViewModel(
+            appState: appState,
+            projectRepository: projectRepository,
+            settingsRepository: settingsRepository,
+            searchService: EntrySearchService(entryRepository: entryRepository),
+            executeService: executeService,
+            permissionService: permissionService,
+            panelOpenTracker: PanelOpenTracker(),
+            onClosePanel: {}
+        )
+
+        viewModel.prepareForPresentation()
+        let loadDeadline = Date().addingTimeInterval(1)
+        while viewModel.entries.count != 2 && Date() < loadDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertFalse(viewModel.isExecutionReady)
+
+        viewModel.executeEntry(at: 1, triggerSource: .pointerClick)
+        let persisted = try waitForRecentExecutionLog(logRepository)
+
+        XCTAssertEqual(viewModel.selectedIndex, 1)
+        XCTAssertEqual(persisted.entryId, secondEntry.id)
+        XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.pointerClick.rawValue)
+        XCTAssertEqual(persisted.result, Constants.ExecutionResult.success.rawValue)
+        XCTAssertEqual(pasteDispatcher.attemptCount, 1)
+    }
+
+    @MainActor
     func testQuickPanelDoesNotUnlockExecutionWhenSearchFieldFocusFails() throws {
         let databaseManager = try makeDatabaseManager()
         let projectRepository = ProjectRepository(dbQueue: databaseManager.dbQueue)
@@ -1189,6 +1374,13 @@ final class PromptPanelTests: XCTestCase {
 
         XCTAssertTrue(panel.canBecomeKey)
         XCTAssertTrue(panel.canBecomeMain)
+    }
+
+    @MainActor
+    func testQuickPanelHostingViewAcceptsFirstMouse() {
+        let hostingView = QuickPanelHostingView(rootView: EmptyView())
+
+        XCTAssertTrue(hostingView.acceptsFirstMouse(for: nil))
     }
 
     func testDatabaseManagerRecoversFromCorruptedStore() throws {
@@ -1473,6 +1665,22 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertTrue(script.contains("Restored database integrity check failed"))
     }
 
+    func testReleaseReadinessVerifiesArchiveForBuiltAppVersion() throws {
+        let script = try readRepositoryText("scripts/release-readiness.sh")
+
+        XCTAssertTrue(script.contains("CFBundleShortVersionString"))
+        XCTAssertTrue(script.contains("CFBundleVersion"))
+        XCTAssertTrue(script.contains("ZIP_PATH=\"${OUTPUT_ROOT}/PromptPanel-${SHORT_VERSION}+${BUILD_VERSION}-macos.zip\""))
+        XCTAssertFalse(script.contains("ZIP_MATCHES=("))
+    }
+
+    func testBuildAppRejectsPartialSparkleConfiguration() throws {
+        let script = try readRepositoryText("scripts/build-app.sh")
+
+        XCTAssertTrue(script.contains("Sparkle feed URL was provided, but SUPublicEDKey is missing."))
+        XCTAssertTrue(script.contains("Sparkle public key was provided, but SUFeedURL is missing."))
+    }
+
     func testBuildAppStripsExtendedAttributesBeforeSigning() throws {
         let script = try readRepositoryText("scripts/build-app.sh")
 
@@ -1581,6 +1789,17 @@ func panelContentSizeSettingRoundTripsWithNormalization() throws {
 
     try settingsRepository.setPanelContentSize(NSSize(width: 2000, height: 100))
     #expect(try settingsRepository.getPanelContentSize() == NSSize(width: Constants.panelMaxContentSize.width, height: Constants.panelMinContentSize.height))
+}
+
+@Test
+func panelWindowOriginSettingRoundTrips() throws {
+    let databaseManager = try makeDatabaseManager()
+    let settingsRepository = SettingsRepository(dbQueue: databaseManager.dbQueue)
+
+    #expect(try settingsRepository.getPanelWindowOrigin() == nil)
+
+    try settingsRepository.setPanelWindowOrigin(NSPoint(x: 321.4, y: 456.6))
+    #expect(try settingsRepository.getPanelWindowOrigin() == NSPoint(x: 321, y: 457))
 }
 
 @Test
@@ -2811,6 +3030,24 @@ func releaseReadinessExercisesBackupRestoreDrill() throws {
     #expect(script.contains("Verifying backup restore path"))
     #expect(script.contains("\"${REPO_ROOT}/scripts/restore-backup.sh\" --target-dir \"$RESTORE_APP_SUPPORT_DIR\" \"$LATEST_BACKUP_PATH\""))
     #expect(script.contains("Restored database integrity check failed"))
+}
+
+@Test
+func releaseReadinessVerifiesArchiveForBuiltAppVersion() throws {
+    let script = try readRepositoryText("scripts/release-readiness.sh")
+
+    #expect(script.contains("CFBundleShortVersionString"))
+    #expect(script.contains("CFBundleVersion"))
+    #expect(script.contains("ZIP_PATH=\"${OUTPUT_ROOT}/PromptPanel-${SHORT_VERSION}+${BUILD_VERSION}-macos.zip\""))
+    #expect(!script.contains("ZIP_MATCHES=("))
+}
+
+@Test
+func buildAppRejectsPartialSparkleConfiguration() throws {
+    let script = try readRepositoryText("scripts/build-app.sh")
+
+    #expect(script.contains("Sparkle feed URL was provided, but SUPublicEDKey is missing."))
+    #expect(script.contains("Sparkle public key was provided, but SUFeedURL is missing."))
 }
 
 @Test

@@ -252,6 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         let isPanelPinned = try settingsRepository.isPanelPinned()
         let panelContentSize = try settingsRepository.getPanelContentSize()
+        let panelWindowOrigin = try settingsRepository.getPanelWindowOrigin()
         let panelShowFooter = try settingsRepository.isPanelFooterVisible()
         let panelCompactRows = try settingsRepository.isPanelCompactRows()
         let appTheme = try settingsRepository.getAppTheme()
@@ -261,6 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             defaultProjectId: defaultProject?.id,
             isPanelPinned: isPanelPinned,
             panelContentSize: panelContentSize,
+            panelWindowOrigin: panelWindowOrigin,
             panelShowFooter: panelShowFooter,
             panelCompactRows: panelCompactRows,
             appTheme: appTheme
@@ -324,6 +326,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             launchRecoveryReport: databaseManager.launchRecoveryReport,
             onSetPanelPinned: { [weak self] isPinned in
                 self?.updatePanelPinnedState(isPinned) ?? false
+            },
+            onSetPanelContentSize: { [weak self] size in
+                self?.updatePanelContentSize(size) ?? false
             }
         )
 
@@ -331,7 +336,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard let self else { return NSView() }
             let view = QuickPanelView(viewModel: self.quickPanelViewModel)
                 .environmentObject(self.appState)
-            return NSHostingView(rootView: view)
+            return QuickPanelHostingView(rootView: view)
         }
         panelService.onWillShow = { [weak self] in
             self?.quickPanelViewModel.prepareForPresentation()
@@ -344,6 +349,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 try self?.settingsRepository.setPanelContentSize(size)
             } catch {
                 PPLogger.panel.error("Failed to persist panel content size: \(error.localizedDescription)")
+            }
+        }
+        panelService.onPanelWindowOriginChanged = { [weak self] origin in
+            do {
+                try self?.settingsRepository.setPanelWindowOrigin(origin)
+            } catch {
+                PPLogger.panel.error("Failed to persist panel window origin: \(error.localizedDescription)")
             }
         }
 
@@ -519,6 +531,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    private func updatePanelContentSize(_ size: NSSize) -> Bool {
+        do {
+            try settingsRepository.setPanelContentSize(size)
+            let normalizedSize = try settingsRepository.getPanelContentSize()
+            panelService.setContentSize(normalizedSize)
+            return true
+        } catch {
+            PPLogger.panel.error("Failed to persist panel content size: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     private func presentLaunchRecoveryAlertIfNeeded() {
         guard let report = databaseManager.launchRecoveryReport else {
             return
@@ -562,5 +586,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         PPLogger.app.info("Switched activation policy to \(String(describing: desiredPolicy))")
+    }
+}
+
+final class QuickPanelHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
     }
 }

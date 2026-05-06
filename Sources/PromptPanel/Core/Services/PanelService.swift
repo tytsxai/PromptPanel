@@ -14,6 +14,7 @@ final class PanelService {
     private var currentAppearance: NSAppearance?
     private var panelDelegate: PanelDelegate?
     private var targetApplication: NSRunningApplication?
+    private var activationObserver: NSObjectProtocol?
     private var deactivateCloseGraceDeadline: Date?
     private let appState: AppState
     private let panelVisibilityCoordinator = PanelVisibilityCoordinator()
@@ -24,10 +25,18 @@ final class PanelService {
     var onWillShow: (() -> Void)?
     var onDidStabilizeActivation: (() -> Void)?
     var onPanelContentSizeChanged: ((NSSize) -> Void)?
+    var onPanelWindowOriginChanged: ((NSPoint) -> Void)?
 
     init(appState: AppState, panelOpenTracker: PanelOpenTracker? = nil) {
         self.appState = appState
         self.panelOpenTracker = panelOpenTracker
+        observeWorkspaceActivation()
+    }
+
+    deinit {
+        if let activationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
+        }
     }
 
     /// Toggle panel visibility.
@@ -56,24 +65,14 @@ final class PanelService {
             return
         }
 
-        if let frontmostApplication = NSWorkspace.shared.frontmostApplication,
-           frontmostApplication.bundleIdentifier != Bundle.main.bundleIdentifier {
-            targetApplication = frontmostApplication
-        }
+        updateTargetApplicationIfNeeded(NSWorkspace.shared.frontmostApplication)
 
         onWillShow?()
         deactivateCloseGraceDeadline = Date().addingTimeInterval(
             TimeInterval(Constants.panelDeactivateCloseGraceMs) / 1000
         )
 
-        // Position panel in center of the active screen
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            let panelSize = panel.frame.size
-            let x = screenFrame.midX - panelSize.width / 2
-            let y = screenFrame.midY - panelSize.height / 2 + screenFrame.height * 0.1
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        positionPanelForPresentation(panel)
 
         appState.isPanelVisible = true
         panelVisibilityCoordinator.finishShow()
@@ -120,6 +119,26 @@ final class PanelService {
         }
     }
 
+    func setContentSize(_ contentSize: NSSize) {
+        appState.panelContentSize = contentSize
+
+        guard let panel else {
+            return
+        }
+
+        let windowSize = Constants.panelWindowContentSize(for: contentSize)
+        let currentFrame = panel.frame
+        let newOrigin = NSPoint(
+            x: currentFrame.midX - windowSize.width / 2,
+            y: currentFrame.midY - windowSize.height / 2
+        )
+        panel.setFrame(
+            NSRect(origin: newOrigin, size: windowSize),
+            display: true,
+            animate: false
+        )
+    }
+
     /// Override the panel's NSAppearance so its chrome tracks the user's
     /// theme choice. Passing `nil` falls back to the system appearance.
     func setAppearance(_ appearance: NSAppearance?) {
@@ -164,6 +183,9 @@ final class PanelService {
             },
             onResize: { [weak self] contentSize in
                 self?.handlePanelResize(contentSize: contentSize)
+            },
+            onMove: { [weak self] origin in
+                self?.handlePanelMove(origin: origin)
             },
             shouldDeferCloseOnDeactivate: { [weak self] in
                 self?.shouldDeferCloseOnDeactivate() ?? false
@@ -226,6 +248,52 @@ final class PanelService {
         onPanelContentSizeChanged?(normalizedSize)
     }
 
+    private func handlePanelMove(origin: NSPoint) {
+        guard appState.panelWindowOrigin != origin else {
+            return
+        }
+        appState.panelWindowOrigin = origin
+        onPanelWindowOriginChanged?(origin)
+    }
+
+    private func positionPanelForPresentation(_ panel: NSPanel) {
+        let panelSize = panel.frame.size
+        let screen = screenForPanelPlacement(panelSize: panelSize)
+        let screenFrame = screen.visibleFrame
+        let origin = resolvedPanelOrigin(panelSize: panelSize, screenFrame: screenFrame)
+        guard panel.frame.origin != origin else {
+            return
+        }
+        panel.setFrameOrigin(origin)
+    }
+
+    private func screenForPanelPlacement(panelSize: NSSize) -> NSScreen {
+        if let storedOrigin = appState.panelWindowOrigin,
+           let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(NSRect(origin: storedOrigin, size: panelSize)) }) {
+            return screen
+        }
+        return NSScreen.main ?? NSScreen.screens.first!
+    }
+
+    private func resolvedPanelOrigin(panelSize: NSSize, screenFrame: NSRect) -> NSPoint {
+        let candidate = appState.panelWindowOrigin ?? defaultPanelOrigin(panelSize: panelSize, screenFrame: screenFrame)
+        return clampPanelOrigin(candidate, panelSize: panelSize, screenFrame: screenFrame)
+    }
+
+    private func defaultPanelOrigin(panelSize: NSSize, screenFrame: NSRect) -> NSPoint {
+        NSPoint(
+            x: screenFrame.midX - panelSize.width / 2 - screenFrame.width * 0.12,
+            y: screenFrame.midY - panelSize.height / 2 - screenFrame.height * 0.08
+        )
+    }
+
+    private func clampPanelOrigin(_ origin: NSPoint, panelSize: NSSize, screenFrame: NSRect) -> NSPoint {
+        NSPoint(
+            x: min(max(origin.x, screenFrame.minX), max(screenFrame.minX, screenFrame.maxX - panelSize.width)),
+            y: min(max(origin.y, screenFrame.minY), max(screenFrame.minY, screenFrame.maxY - panelSize.height))
+        )
+    }
+
     private func applyPinnedWindowBehavior(to panel: NSPanel) {
         if appState.isPanelPinned {
             panel.level = .statusBar
@@ -246,13 +314,39 @@ final class PanelService {
         }
         let currentFrontmostBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         if currentFrontmostBundleId == Bundle.main.bundleIdentifier {
-            _ = targetApplication.activate(options: [])
+            _ = targetApplication.activate(options: [.activateAllWindows])
         } else {
             PPLogger.panel.info(
                 "Skipped target app reactivation because frontmost app already changed to \(currentFrontmostBundleId ?? "unknown")"
             )
         }
         self.targetApplication = nil
+    }
+
+    private func observeWorkspaceActivation() {
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+                return
+            }
+            Task { @MainActor [weak self] in
+                self?.updateTargetApplicationIfNeeded(application)
+            }
+        }
+    }
+
+    private func updateTargetApplicationIfNeeded(_ application: NSRunningApplication?) {
+        guard let application else {
+            return
+        }
+        guard application.bundleIdentifier != Bundle.main.bundleIdentifier else {
+            return
+        }
+        targetApplication = application
+        PPLogger.panel.debug("Target application updated: \(application.bundleIdentifier ?? "unknown")")
     }
 
     private func stabilizePanelActivation(_ panel: NSPanel, attempt: Int = 0) {
@@ -363,6 +457,7 @@ private class PanelDelegate: NSObject, NSWindowDelegate {
 
     let onClose: () -> Void
     let onResize: (NSSize) -> Void
+    let onMove: (NSPoint) -> Void
     let shouldDeferCloseOnDeactivate: () -> Bool
     let shouldCloseOnDeactivate: () -> Bool
     private let resignCloseDelayMs = 80
@@ -370,11 +465,13 @@ private class PanelDelegate: NSObject, NSWindowDelegate {
     init(
         onClose: @escaping () -> Void,
         onResize: @escaping (NSSize) -> Void,
+        onMove: @escaping (NSPoint) -> Void,
         shouldDeferCloseOnDeactivate: @escaping () -> Bool,
         shouldCloseOnDeactivate: @escaping () -> Bool
     ) {
         self.onClose = onClose
         self.onResize = onResize
+        self.onMove = onMove
         self.shouldDeferCloseOnDeactivate = shouldDeferCloseOnDeactivate
         self.shouldCloseOnDeactivate = shouldCloseOnDeactivate
     }
@@ -385,6 +482,13 @@ private class PanelDelegate: NSObject, NSWindowDelegate {
         }
         let contentRect = window.contentRect(forFrameRect: window.frame)
         onResize(contentRect.size)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else {
+            return
+        }
+        onMove(window.frame.origin)
     }
 
     func windowDidResignKey(_ notification: Notification) {

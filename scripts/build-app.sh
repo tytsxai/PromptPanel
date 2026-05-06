@@ -32,7 +32,8 @@ Options:
                           Override CFBundleIdentifier in the packaged app.
   --display-name <name>   Override CFBundleDisplayName and CFBundleName.
   --sparkle-feed-url <u>  Inject SUFeedURL into the packaged app's Info.plist.
-  --sparkle-public-ed-key Inject SUPublicEDKey into the packaged app's Info.plist.
+  --sparkle-public-ed-key <k>
+                          Inject SUPublicEDKey into the packaged app's Info.plist.
   --help                  Show this help message.
 EOF
 }
@@ -94,6 +95,16 @@ done
 if [[ ! -d "$PACKAGE_ROOT" ]]; then
     echo "Package root not found: $PACKAGE_ROOT" >&2
     exit 1
+fi
+
+if [[ -n "$SPARKLE_FEED_URL" && -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+    echo "Sparkle feed URL was provided, but SUPublicEDKey is missing." >&2
+    exit 64
+fi
+
+if [[ -z "$SPARKLE_FEED_URL" && -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+    echo "Sparkle public key was provided, but SUFeedURL is missing." >&2
+    exit 64
 fi
 
 mkdir -p "$OUTPUT_ROOT"

@@ -126,6 +126,10 @@ final class ExecuteService {
             observedBundleId = currentFrontApplicationProvider()
         }
 
+        if observedBundleId == expectedBundleId {
+            try? await Task.sleep(nanoseconds: UInt64(Constants.targetAppPasteSettleDelayMs) * 1_000_000)
+        }
+
         let durationMs = elapsedMilliseconds(since: waitStartedAt)
         PPLogger.execute.info(
             "target_app_restore_completed expected=\(expectedBundleId) observed=\(observedBundleId ?? "unknown") duration_ms=\(durationMs)"

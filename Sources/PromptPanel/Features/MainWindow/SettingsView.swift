@@ -18,6 +18,7 @@ struct SettingsView: View {
                 HStack(alignment: .top, spacing: columnSpacing) {
                     SettingsColumn {
                         AppearanceSection(viewModel: viewModel)
+                        LibrarySection(viewModel: viewModel)
                         HotkeySection(viewModel: viewModel)
                         PanelBehaviorSection(viewModel: viewModel)
                         PermissionSection(viewModel: viewModel)
@@ -385,6 +386,63 @@ private struct ThemeSegmentedPicker: View {
     }
 }
 
+private struct LibrarySection: View {
+    @ObservedObject var viewModel: MainWindowViewModel
+
+    var body: some View {
+        SettingsCard("词条排序") {
+            SettingsRow(
+                label: "默认排序",
+                hint: "按使用＝严格按次数；按等级＝同档色块成组（rookie→master）。"
+            ) {
+                EntrySortSegmentedPicker(selection: Binding(
+                    get: { viewModel.entrySortMode },
+                    set: { viewModel.entrySortMode = $0 }
+                ))
+            }
+        }
+    }
+}
+
+private struct EntrySortSegmentedPicker: View {
+    @Binding var selection: MainWindowViewModel.EntrySortMode
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(MainWindowViewModel.EntrySortMode.allCases) { mode in
+                option(for: mode)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Constants.VisualStyle.tintSubtle)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Constants.VisualStyle.border, lineWidth: 0.5)
+        )
+    }
+
+    private func option(for mode: MainWindowViewModel.EntrySortMode) -> some View {
+        let isActive = selection == mode
+        return Button {
+            selection = mode
+        } label: {
+            Text(mode.title)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(isActive ? Constants.VisualStyle.text : Constants.VisualStyle.textTertiary)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct HotkeySection: View {
     @ObservedObject var viewModel: MainWindowViewModel
 
@@ -439,7 +497,60 @@ private struct PanelBehaviorSection: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
             }
+            SettingsRow(
+                label: "面板尺寸",
+                hint: "可拖拽面板边缘，也可在这里精确设置宽高。"
+            ) {
+                PanelSizeControls(viewModel: viewModel)
+            }
         }
+    }
+}
+
+private struct PanelSizeControls: View {
+    @ObservedObject var viewModel: MainWindowViewModel
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 7) {
+            HStack(spacing: 8) {
+                dimensionStepper(
+                    label: "宽",
+                    value: Binding(
+                        get: { Int(viewModel.panelContentSize.width.rounded()) },
+                        set: { viewModel.setPanelContentWidth($0) }
+                    ),
+                    bounds: Int(Constants.panelMinContentSize.width)...Int(Constants.panelMaxContentSize.width)
+                )
+                dimensionStepper(
+                    label: "高",
+                    value: Binding(
+                        get: { Int(viewModel.panelContentSize.height.rounded()) },
+                        set: { viewModel.setPanelContentHeight($0) }
+                    ),
+                    bounds: Int(Constants.panelMinContentSize.height)...Int(Constants.panelMaxContentSize.height)
+                )
+            }
+
+            SettingsPillButton("恢复默认", systemImage: "arrow.counterclockwise") {
+                viewModel.resetPanelContentSize()
+            }
+        }
+    }
+
+    private func dimensionStepper(label: String, value: Binding<Int>, bounds: ClosedRange<Int>) -> some View {
+        Stepper(value: value, in: bounds, step: 20) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Constants.VisualStyle.textTertiary)
+                Text("\(value.wrappedValue)")
+                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Constants.VisualStyle.text)
+                    .frame(width: 38, alignment: .trailing)
+            }
+        }
+        .controlSize(.small)
+        .fixedSize()
     }
 }
 

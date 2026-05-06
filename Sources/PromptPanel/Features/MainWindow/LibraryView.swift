@@ -443,11 +443,12 @@ private struct EntryListRow: View {
 
     var body: some View {
         let type = Constants.EntryType.resolve(entry.type)
+        let level = Constants.EntryLevel.resolve(useCount: entry.useCount)
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: type.symbolName)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(isSelected ? Constants.VisualStyle.text : Constants.VisualStyle.textSecondary)
+                    .foregroundStyle(level.color)
                     .frame(width: 18, height: 18)
                     .padding(.top, 1)
 
@@ -473,6 +474,7 @@ private struct EntryListRow: View {
                     HStack(spacing: 5) {
                         Text("\(entry.useCount) 次")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(level.color)
                         Text("·")
                             .opacity(0.5)
                         Text(lastUsedText)
@@ -587,7 +589,8 @@ private struct PreviewPane: View {
     }
 
     private func header(for entry: Entry, type: Constants.EntryType) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let level = Constants.EntryLevel.resolve(useCount: entry.useCount)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
                     Image(systemName: type.symbolName)
@@ -602,6 +605,16 @@ private struct PreviewPane: View {
                     RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
                         .fill(Constants.VisualStyle.tintSubtle)
                 )
+
+                Text(level.displayName)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(level.color)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                            .fill(level.fillColor)
+                    )
 
                 if entry.isPinned {
                     HStack(spacing: 3) {
@@ -619,9 +632,13 @@ private struct PreviewPane: View {
                     )
                 }
 
-                Text("· \(entry.useCount) 次使用 · \(lastUsedText(entry))")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Constants.VisualStyle.textQuaternary)
+                HStack(spacing: 4) {
+                    Text("· \(entry.useCount) 次使用")
+                        .foregroundStyle(level.color)
+                    Text("· \(lastUsedText(entry))")
+                        .foregroundStyle(Constants.VisualStyle.textQuaternary)
+                }
+                .font(.system(size: 11))
 
                 Spacer(minLength: 0)
 

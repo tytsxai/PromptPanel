@@ -81,6 +81,24 @@ final class SettingsRepository: @unchecked Sendable {
         PPLogger.panel.info("Panel content size set to: \(Int(normalizedSize.width))x\(Int(normalizedSize.height))")
     }
 
+    func getPanelWindowOrigin() throws -> NSPoint? {
+        guard
+            let rawX = try get(Constants.SettingsKey.panelWindowOriginX),
+            let rawY = try get(Constants.SettingsKey.panelWindowOriginY),
+            let x = Double(rawX),
+            let y = Double(rawY)
+        else {
+            return nil
+        }
+        return NSPoint(x: x, y: y)
+    }
+
+    func setPanelWindowOrigin(_ origin: NSPoint) throws {
+        try set(Constants.SettingsKey.panelWindowOriginX, value: String(Int(origin.x.rounded())))
+        try set(Constants.SettingsKey.panelWindowOriginY, value: String(Int(origin.y.rounded())))
+        PPLogger.panel.info("Panel window origin set to: \(Int(origin.x)),\(Int(origin.y))")
+    }
+
     private func normalizedPanelContentSize(_ size: NSSize) -> NSSize {
         NSSize(
             width: min(max(size.width, Constants.panelMinContentSize.width), Constants.panelMaxContentSize.width),
@@ -117,5 +135,16 @@ final class SettingsRepository: @unchecked Sendable {
     func setAppTheme(_ theme: AppTheme) throws {
         try set(Constants.SettingsKey.appTheme, value: theme.rawValue)
         PPLogger.app.info("App theme set to: \(theme.rawValue)")
+    }
+
+    // MARK: - Library
+
+    func getEntrySortMode() throws -> String? {
+        try get(Constants.SettingsKey.entrySortMode)
+    }
+
+    func setEntrySortMode(_ rawValue: String) throws {
+        try set(Constants.SettingsKey.entrySortMode, value: rawValue)
+        PPLogger.entry.info("Entry sort mode set to: \(rawValue)")
     }
 }

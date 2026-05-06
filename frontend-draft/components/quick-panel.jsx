@@ -3,7 +3,7 @@
 
 function PanelRow({ entry, index, selected, onClick, showNumber, dense, hideUses }) {
   const meta = KIND_META[entry.kind] || KIND_META.note;
-  const h = dense ? 30 : 34;
+  const h = dense ? 26 : 30;
   return (
     <div
       onClick={onClick}
@@ -36,7 +36,7 @@ function PanelRow({ entry, index, selected, onClick, showNumber, dense, hideUses
         <div style={{
           fontSize: 12.5, fontWeight: 500, color: T.text,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          flexShrink: 0, maxWidth: '42%',
+          flex: '0 0 min(max(28%, 150px), 260px)',
         }}>
           {entry.title}
           {entry.pinned && (
@@ -46,7 +46,7 @@ function PanelRow({ entry, index, selected, onClick, showNumber, dense, hideUses
           )}
         </div>
         <div style={{
-          fontSize: 11.5, color: T.textTertiary,
+          fontSize: 11.5, color: T.textSecondary,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           flex: 1, minWidth: 0,
         }}>
@@ -60,7 +60,7 @@ function PanelRow({ entry, index, selected, onClick, showNumber, dense, hideUses
       }}>
         {!hideUses && selected && <span style={{ fontFamily: T.fontMono }}>{entry.uses} 次</span>}
         <span style={{
-          fontSize: 10, color: selected ? T.textSecondary : T.textQuaternary,
+          fontSize: 10, color: selected ? T.textSecondary : T.textTertiary,
           fontWeight: 500,
         }}>{meta.label}</span>
       </div>
@@ -273,22 +273,37 @@ function QuickPanel({ width = 720, showFooter = true, compact = false }) {
         <div style={{ color: T.textTertiary, display: 'flex' }}>
           <Icon name="search" size={13} />
         </div>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder={`搜索 ${currentProjectName} · 输入 # 按标签筛选`}
-          autoFocus
-          style={{
-            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            color: T.text, fontSize: 13, fontFamily: T.font,
-          }}
-        />
+        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+          {!query && (
+            <div style={{
+              position: 'absolute', inset: '0 auto 0 4px',
+              display: 'flex', alignItems: 'center',
+              color: T.textTertiary, fontSize: 12.5, fontWeight: 500,
+              pointerEvents: 'none', whiteSpace: 'nowrap',
+            }}>
+              搜索 {currentProjectName} · 输入 # 按标签筛选
+            </div>
+          )}
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            autoFocus
+            style={{
+              width: '100%', background: 'transparent', border: 'none', outline: 'none',
+              color: T.text, fontSize: 13, fontFamily: T.font,
+            }}
+          />
+        </div>
         {query && (
           <button onClick={() => setQuery('')} style={{
             background: 'transparent', border: 'none', color: T.textTertiary,
             cursor: 'pointer', padding: 2, display: 'flex',
           }}><Icon name="close" size={12} /></button>
         )}
+        <button title="固定面板" style={{
+          background: 'transparent', border: 'none', color: T.textTertiary,
+          cursor: 'pointer', padding: 2, display: 'flex',
+        }}><Icon name="pin" size={12} /></button>
       </div>
 
       {/* Unified filter chips — horizontally scrollable */}
@@ -350,7 +365,10 @@ function QuickPanel({ width = 720, showFooter = true, compact = false }) {
             <Kbd>↑↓</Kbd>选择
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Kbd>⏎</Kbd>粘贴
+            <Kbd>⏎</Kbd>执行
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Kbd>Esc</Kbd>关闭
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Kbd>⌘C</Kbd>复制
@@ -358,8 +376,11 @@ function QuickPanel({ width = 720, showFooter = true, compact = false }) {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Kbd>⌘1-9</Kbd>直达
           </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Kbd>⌘P</Kbd>固定
+          </span>
           <div style={{ flex: 1 }} />
-          <span style={{ color: T.textQuaternary, fontFamily: T.fontMono }}>
+          <span style={{ color: T.textTertiary, fontFamily: T.fontMono }}>
             {filtered.length}/{ENTRIES.length}
           </span>
         </div>

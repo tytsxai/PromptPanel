@@ -124,6 +124,10 @@ final class QuickPanelViewModel: ObservableObject {
         applyBaseStatus()
     }
 
+    func togglePanelPinned() {
+        setPanelPinned(!appState.isPanelPinned)
+    }
+
     func openAccessibilitySettings() {
         permissionService.openAccessibilitySettings()
     }
@@ -350,6 +354,11 @@ final class QuickPanelViewModel: ObservableObject {
     /// Execute the Nth visible entry (1-indexed). Used by ⌘1-9.
     func executeEntry(atNumber number: Int, triggerSource: Constants.ExecutionTrigger = .keyboardSubmit) {
         let index = number - 1
+        executeEntry(at: index, triggerSource: triggerSource)
+    }
+
+    /// Execute a visible entry by zero-based index. Used by pointer clicks and direct shortcuts.
+    func executeEntry(at index: Int, triggerSource: Constants.ExecutionTrigger = .pointerClick) {
         guard entries.indices.contains(index) else {
             return
         }

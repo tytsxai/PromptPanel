@@ -44,9 +44,9 @@ enum Constants {
 
         // Text hierarchy
         static let text            = dynamicColor(dark: 0xe8e9ec, light: 0x1a1c20)
-        static let textSecondary   = dynamicColor(dark: 0x9a9ea6, light: 0x4e525b)
-        static let textTertiary    = dynamicColor(dark: 0x6b6f77, light: 0x7a7e87)
-        static let textQuaternary  = dynamicColor(dark: 0x4a4d54, light: 0xadb1b9)
+        static let textSecondary   = dynamicColor(dark: 0xaeb3bc, light: 0x4e525b)
+        static let textTertiary    = dynamicColor(dark: 0x858b96, light: 0x7a7e87)
+        static let textQuaternary  = dynamicColor(dark: 0x666d78, light: 0xadb1b9)
 
         // Accent (indigo 7c8cf8 — slightly deeper in light mode for contrast)
         static let accent          = dynamicColor(dark: 0x7c8cf8, light: 0x5667e6)
@@ -72,6 +72,24 @@ enum Constants {
         // Convenience: dark "scrim" used for panel footers — always darker
         // than the surface (black-tinted even in light mode).
         static let scrim           = semanticFill(dark: 0x000000, darkAlpha: 0.20, light: 0x000000, lightAlpha: 0.05)
+
+        // Entry level palette — driven by useCount tiers (see `EntryLevel`).
+        // `master` flips to near-white in dark mode so the rare top tier
+        // still stands out against the dark surface.
+        static let levelBlue       = dynamicColor(dark: 0x6da8f7, light: 0x3066cc)
+        static let levelBlueDim    = semanticFill(dark: 0x6da8f7, darkAlpha: 0.14, light: 0x3066cc, lightAlpha: 0.12)
+        static let levelGreen      = dynamicColor(dark: 0x5cb87a, light: 0x2f8a4f)
+        static let levelGreenDim   = semanticFill(dark: 0x5cb87a, darkAlpha: 0.14, light: 0x2f8a4f, lightAlpha: 0.13)
+        static let levelYellow     = dynamicColor(dark: 0xd9bb56, light: 0x9b6f1a)
+        static let levelYellowDim  = semanticFill(dark: 0xd9bb56, darkAlpha: 0.16, light: 0x9b6f1a, lightAlpha: 0.14)
+        static let levelPink       = dynamicColor(dark: 0xeb87b3, light: 0xc94785)
+        static let levelPinkDim    = semanticFill(dark: 0xeb87b3, darkAlpha: 0.14, light: 0xc94785, lightAlpha: 0.12)
+        static let levelOrange     = dynamicColor(dark: 0xe89455, light: 0xb05418)
+        static let levelOrangeDim  = semanticFill(dark: 0xe89455, darkAlpha: 0.14, light: 0xb05418, lightAlpha: 0.12)
+        static let levelPurple     = dynamicColor(dark: 0xb084ee, light: 0x7335bf)
+        static let levelPurpleDim  = semanticFill(dark: 0xb084ee, darkAlpha: 0.16, light: 0x7335bf, lightAlpha: 0.13)
+        static let levelMaster     = dynamicColor(dark: 0xe8e9ec, light: 0x111418)
+        static let levelMasterDim  = semanticFill(dark: 0xe8e9ec, darkAlpha: 0.18, light: 0x111418, lightAlpha: 0.10)
 
         // MARK: - Dynamic color helpers
 
@@ -115,8 +133,8 @@ enum Constants {
         static let sectionCornerRadius: CGFloat = 9
         static let compactControlHeight: CGFloat = 24
         static let regularControlHeight: CGFloat = 28
-        static let compactRowHeight: CGFloat = 30
-        static let regularRowHeight: CGFloat = 34
+        static let compactRowHeight: CGFloat = 26
+        static let regularRowHeight: CGFloat = 30
         static let headerHeight: CGFloat = 34
         static let footerHeight: CGFloat = 26
         static let badgeCornerRadius: CGFloat = 4
@@ -178,9 +196,12 @@ enum Constants {
         static let panelPinned = "panel_pinned"
         static let panelContentWidth = "panel_content_width"
         static let panelContentHeight = "panel_content_height"
+        static let panelWindowOriginX = "panel_window_origin_x"
+        static let panelWindowOriginY = "panel_window_origin_y"
         static let panelShowFooter = "panel_show_footer"
         static let panelCompactRows = "panel_compact_rows"
         static let appTheme = "app_theme"
+        static let entrySortMode = "entry_sort_mode"
     }
 
     // MARK: - Entry Types
@@ -223,6 +244,75 @@ enum Constants {
                 return .prompt
             }
             return parsed
+        }
+    }
+
+    // MARK: - Entry Levels (use-count tiers)
+
+    /// Visible "level" for an entry, derived purely from `useCount`.
+    ///
+    /// Why: gives the user instant feedback that an entry is being used —
+    /// the icon and use-count chip subtly change color as they level up.
+    /// Thresholds ramp like an XP curve (fast → slow), so the first few
+    /// uses bump tiers quickly, while the legendary tier ("master") stays
+    /// rare. Most heavy-use entries land on `.purple`.
+    enum EntryLevel: Int, CaseIterable {
+        case rookie = 0    // blue
+        case bronze = 1    // green
+        case silver = 2    // yellow
+        case gold = 3      // pink
+        case platinum = 4  // orange
+        case diamond = 5   // purple
+        case master = 6    // black / inverted-white in dark
+
+        static func resolve(useCount: Int) -> EntryLevel {
+            switch max(useCount, 0) {
+            case 0:        return .rookie
+            case 1...3:    return .bronze
+            case 4...9:    return .silver
+            case 10...24:  return .gold
+            case 25...59:  return .platinum
+            case 60...149: return .diamond
+            default:       return .master
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .rookie:   return "新词条"
+            case .bronze:   return "上手"
+            case .silver:   return "熟练"
+            case .gold:     return "常用"
+            case .platinum: return "高频"
+            case .diamond:  return "重度"
+            case .master:   return "传奇"
+            }
+        }
+
+        /// Foreground color used for icons and the use-count chip text.
+        var color: Color {
+            switch self {
+            case .rookie:   return VisualStyle.levelBlue
+            case .bronze:   return VisualStyle.levelGreen
+            case .silver:   return VisualStyle.levelYellow
+            case .gold:     return VisualStyle.levelPink
+            case .platinum: return VisualStyle.levelOrange
+            case .diamond:  return VisualStyle.levelPurple
+            case .master:   return VisualStyle.levelMaster
+            }
+        }
+
+        /// Subtle background fill (for chips / pills).
+        var fillColor: Color {
+            switch self {
+            case .rookie:   return VisualStyle.levelBlueDim
+            case .bronze:   return VisualStyle.levelGreenDim
+            case .silver:   return VisualStyle.levelYellowDim
+            case .gold:     return VisualStyle.levelPinkDim
+            case .platinum: return VisualStyle.levelOrangeDim
+            case .diamond:  return VisualStyle.levelPurpleDim
+            case .master:   return VisualStyle.levelMasterDim
+            }
         }
     }
 
@@ -272,6 +362,7 @@ enum Constants {
     static let searchLatencyTargetMs = 80
     static let executionLatencyTargetMs = 250
     static let targetAppRestorePollIntervalMs = 40
+    static let targetAppPasteSettleDelayMs = 120
     static let targetAppRestoreTimeoutMs = 700
 
     enum ExecutionFailureReason: String, Codable {

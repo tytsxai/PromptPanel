@@ -15,9 +15,9 @@ const T = {
 
   // Text
   text: '#e8e9ec',
-  textSecondary: '#9a9ea6',
-  textTertiary: '#6b6f77',
-  textQuaternary: '#4a4d54',
+  textSecondary: '#aeb3bc',
+  textTertiary: '#858b96',
+  textQuaternary: '#666d78',
 
   // Accent — single indigo/violet, low sat, used sparingly
   accent: '#7c8cf8',          // primary accent (links, selection tint)

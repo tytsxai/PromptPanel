@@ -16,6 +16,8 @@ struct KeyAwareSearchField: NSViewRepresentable {
     /// Optional handler for ⌘C. Return `true` to swallow the event (suppresses
     /// the default text copy).
     var onCommandCopy: (() -> Bool)? = nil
+    /// Optional handler for ⌘P. Return `true` to swallow the event.
+    var onCommandPin: (() -> Bool)? = nil
 
     func makeNSView(context: Context) -> PromptSearchField {
         let field = PromptSearchField()
@@ -35,6 +37,12 @@ struct KeyAwareSearchField: NSViewRepresentable {
                 if let characters = event.charactersIgnoringModifiers?.lowercased(), characters == "c",
                    field?.stringValue.isEmpty == true || field?.currentEditor()?.selectedRange.length == 0 {
                     if let onCommandCopy = field?.onCommandCopy, onCommandCopy() {
+                        return true
+                    }
+                }
+                // ⌘P — toggle the quick panel pinned state in place.
+                if let characters = event.charactersIgnoringModifiers?.lowercased(), characters == "p" {
+                    if let onCommandPin = field?.onCommandPin, onCommandPin() {
                         return true
                     }
                 }
@@ -67,6 +75,7 @@ struct KeyAwareSearchField: NSViewRepresentable {
         }
         field.onCommandDigit = onCommandDigit
         field.onCommandCopy = onCommandCopy
+        field.onCommandPin = onCommandPin
         return field
     }
 
@@ -81,6 +90,7 @@ struct KeyAwareSearchField: NSViewRepresentable {
         context.coordinator.focusResolveHandler = onFocusResolved
         nsView.onCommandDigit = onCommandDigit
         nsView.onCommandCopy = onCommandCopy
+        nsView.onCommandPin = onCommandPin
 
         if context.coordinator.lastFocusToken != focusToken {
             context.coordinator.lastFocusToken = focusToken
@@ -283,6 +293,7 @@ final class PromptSearchField: NSSearchField {
     var keyHandler: ((NSEvent) -> Bool)?
     var onCommandDigit: ((Int) -> Bool)?
     var onCommandCopy: (() -> Bool)?
+    var onCommandPin: (() -> Bool)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -299,6 +310,16 @@ final class PromptSearchField: NSSearchField {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        focusForImmediateTyping()
+        super.mouseDown(with: event)
+        focusForImmediateTyping()
     }
 
     override func textDidBeginEditing(_ notification: Notification) {
@@ -331,6 +352,15 @@ final class PromptSearchField: NSSearchField {
         stringValue = text
         currentEditor()?.string = text
         currentEditor()?.selectedRange = NSRange(location: text.count, length: 0)
+    }
+
+    private func focusForImmediateTyping() {
+        if NSApp.isActive == false {
+            _ = NSRunningApplication.current.activate(options: [])
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        window?.makeKeyAndOrderFront(nil)
+        window?.makeFirstResponder(self)
     }
 
     private func configureAppearance() {

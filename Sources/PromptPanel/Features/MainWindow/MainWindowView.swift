@@ -199,28 +199,44 @@ private struct ProjectEditorSheet: View {
     @Binding var draft: MainWindowViewModel.ProjectDraft
     let onSave: () -> Bool
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var isNameFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(draft.existingProject == nil ? "新建项目" : "重命名项目")
-                .font(.title3.weight(.semibold))
+        VStack(spacing: 0) {
+            SheetHeader(title: draft.existingProject == nil ? "新建项目" : "重命名项目")
 
-            TextField("项目名称", text: $draft.name)
-                .textFieldStyle(.roundedBorder)
-
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
-                    if onSave() {
-                        dismiss()
-                    }
+            VStack(alignment: .leading, spacing: 10) {
+                SheetField(label: "项目名称") {
+                    TextField("项目名称", text: $draft.name)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+                        .focused($isNameFocused)
                 }
-                .keyboardShortcut(.defaultAction)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+
+            SheetActionFooter(
+                primaryTitle: "保存",
+                canSubmit: isProjectDraftValid,
+                message: isProjectDraftValid ? nil : "项目名称不能为空。",
+                onCancel: { dismiss() },
+                onPrimary: saveAndDismiss
+            )
         }
-        .padding(20)
         .frame(width: 420)
+        .onAppear { isNameFocused = true }
+    }
+
+    private var isProjectDraftValid: Bool {
+        draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private func saveAndDismiss() {
+        guard isProjectDraftValid else { return }
+        if onSave() {
+            dismiss()
+        }
     }
 }
 
@@ -229,63 +245,140 @@ private struct EntryEditorSheet: View {
     let projects: [Project]
     let onSave: () -> Bool
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var focusedField: FocusedField?
+
+    private enum FocusedField: Hashable {
+        case title
+        case content
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(draft.existingEntry == nil ? "新建词条" : "编辑词条")
-                .font(.title3.weight(.semibold))
+        VStack(spacing: 0) {
+            SheetHeader(title: draft.existingEntry == nil ? "新建词条" : "编辑词条")
 
-            TextField("标题", text: $draft.title)
-                .textFieldStyle(.roundedBorder)
-
-            Picker("所属项目", selection: $draft.projectId) {
-                ForEach(projects) { project in
-                    Text(project.name).tag(project.id)
+            VStack(alignment: .leading, spacing: 14) {
+                SheetField(label: "标题") {
+                    TextField("给这条内容起个短标题", text: $draft.title)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+                        .focused($focusedField, equals: .title)
                 }
-            }
 
-            Picker("类型", selection: $draft.type) {
-                ForEach(Constants.EntryType.allCases, id: \.rawValue) { type in
-                    Text(type.displayName).tag(type.rawValue)
-                }
-            }
-
-            Toggle("置顶", isOn: $draft.isPinned)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("标签")
-                    .font(.headline)
-                TextField("用逗号分隔，例如：发布, 检查清单", text: $draft.tagsText)
-                    .textFieldStyle(.roundedBorder)
-                Text("短标签用于筛选，保持简洁（每个标签不超过 10 个字）。")
-                    .font(.caption)
-                    .foregroundStyle(Constants.VisualStyle.textSecondary)
-            }
-
-            Text("内容")
-                .font(.headline)
-
-            TextEditor(text: $draft.content)
-                .font(.body)
-                .frame(minHeight: 220)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(.quaternary, lineWidth: 1)
-                )
-
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
-                    if onSave() {
-                        dismiss()
+                HStack(alignment: .top, spacing: 14) {
+                    SheetField(label: "所属项目") {
+                        Picker("", selection: $draft.projectId) {
+                            ForEach(projects) { project in
+                                Text(project.name).tag(project.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 176, alignment: .leading)
+                        .fixedSize()
                     }
+
+                    SheetField(label: "类型") {
+                        Picker("", selection: $draft.type) {
+                            ForEach(Constants.EntryType.allCases, id: \.rawValue) { type in
+                                Text(type.displayName).tag(type.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 132, alignment: .leading)
+                        .fixedSize()
+                    }
+
+                    Toggle(isOn: $draft.isPinned) {
+                        Text("置顶")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .toggleStyle(.checkbox)
+                    .padding(.top, 23)
+
+                    Spacer(minLength: 0)
                 }
-                .keyboardShortcut(.defaultAction)
+
+                SheetField(
+                    label: "标签",
+                    footer: "短标签用于筛选，保持简洁（每个标签不超过 10 个字）。"
+                ) {
+                    TextField("用逗号分隔，例如：发布, 检查清单", text: $draft.tagsText)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+                }
+
+                contentEditor
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+
+            SheetActionFooter(
+                primaryTitle: "保存",
+                canSubmit: isEntryDraftValid,
+                message: isEntryDraftValid ? nil : "标题和内容都填完后才能保存。",
+                onCancel: { dismiss() },
+                onPrimary: saveAndDismiss
+            )
         }
-        .padding(20)
-        .frame(width: 620, height: 560)
+        .frame(width: 620)
+        .onAppear {
+            focusedField = draft.title.isEmpty ? .title : .content
+        }
+    }
+
+    private var contentEditor: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                SheetFieldLabel(text: "内容")
+                Spacer(minLength: 0)
+                Text("\(draft.content.count) 字")
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Constants.VisualStyle.textQuaternary)
+            }
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $draft.content)
+                    .font(.system(size: 13))
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 4)
+                    .background(Constants.VisualStyle.surface)
+                    .focused($focusedField, equals: .content)
+
+                if draft.content.isEmpty {
+                    Text("粘贴或输入要执行的内容")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Constants.VisualStyle.textQuaternary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 10)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(height: 230)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Constants.VisualStyle.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(contentBorderColor, lineWidth: focusedField == .content ? 1 : 0.5)
+            )
+        }
+    }
+
+    private var contentBorderColor: Color {
+        focusedField == .content ? Constants.VisualStyle.accentBorder : Constants.VisualStyle.borderStrong
+    }
+
+    private var isEntryDraftValid: Bool {
+        draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && draft.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private func saveAndDismiss() {
+        guard isEntryDraftValid else { return }
+        if onSave() {
+            dismiss()
+        }
     }
 }
 
@@ -296,31 +389,143 @@ private struct ProjectMigrationSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("删除前先迁移词条")
-                .font(.title3.weight(.semibold))
+        VStack(spacing: 0) {
+            SheetHeader(title: "删除前先迁移词条")
 
-            Text("项目 “\(state.project.name)” 下还有 \(state.entryCount) 条词条，必须先迁移到其他项目。")
-                .foregroundStyle(Constants.VisualStyle.textSecondary)
+            VStack(alignment: .leading, spacing: 14) {
+                Text("项目 “\(state.project.name)” 下还有 \(state.entryCount) 条词条，必须先迁移到其他项目。")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Constants.VisualStyle.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Picker("迁移到", selection: $state.targetProjectId) {
-                ForEach(targets) { project in
-                    Text(project.name).tag(project.id)
+                SheetField(label: "迁移到") {
+                    Picker("", selection: $state.targetProjectId) {
+                        ForEach(targets) { project in
+                            Text(project.name).tag(project.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
 
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("迁移并删除") {
-                    if onConfirm() {
-                        dismiss()
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
+            SheetActionFooter(
+                primaryTitle: "迁移并删除",
+                primaryRole: .destructive,
+                canSubmit: state.targetProjectId.isEmpty == false,
+                onCancel: { dismiss() },
+                onPrimary: confirmAndDismiss
+            )
+        }
+        .frame(width: 460)
+    }
+
+    private func confirmAndDismiss() {
+        guard state.targetProjectId.isEmpty == false else { return }
+        if onConfirm() {
+            dismiss()
+        }
+    }
+}
+
+private struct SheetHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Constants.VisualStyle.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
+            .background(Constants.VisualStyle.surfaceRaised)
+            .overlay(
+                Rectangle()
+                    .fill(Constants.VisualStyle.divider)
+                    .frame(height: 0.5),
+                alignment: .bottom
+            )
+    }
+}
+
+private struct SheetField<Content: View>: View {
+    let label: String
+    let footer: String?
+    let content: () -> Content
+
+    init(label: String, footer: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.label = label
+        self.footer = footer
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SheetFieldLabel(text: label)
+            content()
+            if let footer {
+                Text(footer)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Constants.VisualStyle.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(20)
-        .frame(width: 460)
+    }
+}
+
+private struct SheetFieldLabel: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Constants.VisualStyle.text)
+    }
+}
+
+private struct SheetActionFooter: View {
+    let primaryTitle: String
+    var primaryRole: ButtonRole?
+    let canSubmit: Bool
+    var message: String?
+    let onCancel: () -> Void
+    let onPrimary: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let message {
+                Text(message)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Constants.VisualStyle.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Button("取消", action: onCancel)
+                .keyboardShortcut(.cancelAction)
+                .frame(minWidth: 72)
+
+            Button(role: primaryRole, action: onPrimary) {
+                Text(primaryTitle)
+                    .frame(minWidth: 72)
+            }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .disabled(!canSubmit)
+        }
+        .controlSize(.regular)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Constants.VisualStyle.surfaceRaised)
+        .overlay(
+            Rectangle()
+                .fill(Constants.VisualStyle.divider)
+                .frame(height: 0.5),
+            alignment: .top
+        )
     }
 }

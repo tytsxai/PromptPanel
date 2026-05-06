@@ -14,6 +14,7 @@ final class MainWindowViewModel: ObservableObject {
 
     enum EntrySortMode: String, CaseIterable, Identifiable {
         case uses
+        case byLevel = "by_level"
         case recent
         case alpha
 
@@ -22,9 +23,17 @@ final class MainWindowViewModel: ObservableObject {
         var title: String {
             switch self {
             case .uses: return "按使用"
+            case .byLevel: return "按等级"
             case .recent: return "按最近"
             case .alpha: return "按字母"
             }
+        }
+
+        static func resolve(_ rawValue: String?) -> EntrySortMode {
+            guard let rawValue, let parsed = EntrySortMode(rawValue: rawValue) else {
+                return .uses
+            }
+            return parsed
         }
     }
 
@@ -119,6 +128,8 @@ final class MainWindowViewModel: ObservableObject {
     }
     @Published var entrySortMode: EntrySortMode = .uses {
         didSet {
+            guard oldValue != entrySortMode else { return }
+            persistEntrySortMode()
             refreshDisplayedEntries()
         }
     }
@@ -134,6 +145,7 @@ final class MainWindowViewModel: ObservableObject {
     @Published var isPanelPinned: Bool = false
     @Published var panelShowFooter: Bool = true
     @Published var panelCompactRows: Bool = false
+    @Published var panelContentSize: NSSize = Constants.panelContentSize
     @Published var appTheme: AppTheme = .system
     private let appState: AppState
     private let projectRepository: ProjectRepository
@@ -146,6 +158,7 @@ final class MainWindowViewModel: ObservableObject {
     private let updaterService: UpdaterService
     private let launchRecoveryReport: LaunchRecoveryReport?
     private let onSetPanelPinned: (Bool) -> Bool
+    private let onSetPanelContentSize: (NSSize) -> Bool
     private let onCopyEntry: ((Entry) -> Bool)?
     private var cancellables = Set<AnyCancellable>()
     private let entriesLoadQueue = DispatchQueue(label: "PromptPanel.main-window.entries", qos: .userInitiated)
@@ -165,6 +178,7 @@ final class MainWindowViewModel: ObservableObject {
         updaterService: UpdaterService,
         launchRecoveryReport: LaunchRecoveryReport?,
         onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false },
+        onSetPanelContentSize: @escaping (NSSize) -> Bool = { _ in false },
         onCopyEntry: ((Entry) -> Bool)? = nil
     ) {
         self.appState = appState
@@ -178,7 +192,15 @@ final class MainWindowViewModel: ObservableObject {
         self.updaterService = updaterService
         self.launchRecoveryReport = launchRecoveryReport
         self.onSetPanelPinned = onSetPanelPinned
+        self.onSetPanelContentSize = onSetPanelContentSize
         self.onCopyEntry = onCopyEntry
+
+        // Hydrate persisted sort preference before any view binds the publisher,
+        // so the sort dropdown opens with the user's saved choice instead of
+        // briefly flashing the default.
+        if let stored = try? settingsRepository.getEntrySortMode() {
+            self.entrySortMode = EntrySortMode.resolve(stored)
+        }
 
         observeChanges()
     }
@@ -252,6 +274,18 @@ final class MainWindowViewModel: ObservableObject {
             case .uses:
                 if lhs.useCount != rhs.useCount {
                     return lhs.useCount > rhs.useCount
+                }
+                return compareEntriesByRecencyThenTitle(lhs, rhs)
+            case .byLevel:
+                // Why distinct from `.uses`: same color tier groups together
+                // and within the tier we surface "what did I touch most recently"
+                // rather than "what has the highest raw count". Without this
+                // tiebreak the two modes would be observationally identical
+                // (level is monotone in useCount), making the toggle pointless.
+                let lhsLevel = Constants.EntryLevel.resolve(useCount: lhs.useCount).rawValue
+                let rhsLevel = Constants.EntryLevel.resolve(useCount: rhs.useCount).rawValue
+                if lhsLevel != rhsLevel {
+                    return lhsLevel > rhsLevel
                 }
                 return compareEntriesByRecencyThenTitle(lhs, rhs)
             case .recent:
@@ -401,7 +435,19 @@ final class MainWindowViewModel: ObservableObject {
         isPanelPinned = appState.isPanelPinned
         panelShowFooter = appState.panelShowFooter
         panelCompactRows = appState.panelCompactRows
+        panelContentSize = appState.panelContentSize
         appTheme = appState.appTheme
+    }
+
+    private func persistEntrySortMode() {
+        do {
+            try settingsRepository.setEntrySortMode(entrySortMode.rawValue)
+        } catch {
+            // Non-fatal: the in-memory choice still applies; we'll retry on the
+            // next change. No user-visible banner — the dropdown already gave
+            // them feedback that the click was received.
+            PPLogger.entry.error("Failed to persist entry sort mode: \(error.localizedDescription)")
+        }
     }
 
     func setAppTheme(_ theme: AppTheme) {
@@ -448,6 +494,30 @@ final class MainWindowViewModel: ObservableObject {
         }
         self.isPanelPinned = appState.isPanelPinned
         bannerMessage = self.isPanelPinned ? "快捷面板已固定置顶。" : "快捷面板已恢复临时置顶。"
+    }
+
+    func setPanelContentWidth(_ width: Int) {
+        setPanelContentSize(NSSize(width: CGFloat(width), height: panelContentSize.height))
+    }
+
+    func setPanelContentHeight(_ height: Int) {
+        setPanelContentSize(NSSize(width: panelContentSize.width, height: CGFloat(height)))
+    }
+
+    func resetPanelContentSize() {
+        setPanelContentSize(Constants.panelContentSize, successMessage: "快捷面板尺寸已恢复默认。")
+    }
+
+    private func setPanelContentSize(_ size: NSSize, successMessage: String? = nil) {
+        guard onSetPanelContentSize(size) else {
+            panelContentSize = appState.panelContentSize
+            bannerMessage = "保存面板尺寸失败，请重试。"
+            return
+        }
+        panelContentSize = appState.panelContentSize
+        if let successMessage {
+            bannerMessage = successMessage
+        }
     }
 
     func hotkeySummary() -> String {
@@ -781,6 +851,13 @@ final class MainWindowViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] value in
                 self?.panelCompactRows = value
+            }
+            .store(in: &cancellables)
+
+        appState.$panelContentSize
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                self?.panelContentSize = value
             }
             .store(in: &cancellables)
 

@@ -20,6 +20,7 @@ final class AppState: ObservableObject {
     @Published var isPanelVisible: Bool = false
     @Published var isPanelPinned: Bool = false
     @Published var panelContentSize: NSSize = Constants.panelContentSize
+    @Published var panelWindowOrigin: NSPoint?
     @Published var panelShowFooter: Bool = true
     @Published var panelCompactRows: Bool = false
     @Published var appTheme: AppTheme = .system
@@ -44,6 +45,7 @@ final class AppState: ObservableObject {
         defaultProjectId: String?,
         isPanelPinned: Bool = false,
         panelContentSize: NSSize = Constants.panelContentSize,
+        panelWindowOrigin: NSPoint? = nil,
         panelShowFooter: Bool = true,
         panelCompactRows: Bool = false,
         appTheme: AppTheme = .system
@@ -52,11 +54,12 @@ final class AppState: ObservableObject {
         self.defaultProjectId = defaultProjectId
         self.isPanelPinned = isPanelPinned
         self.panelContentSize = panelContentSize
+        self.panelWindowOrigin = panelWindowOrigin
         self.panelShowFooter = panelShowFooter
         self.panelCompactRows = panelCompactRows
         self.appTheme = appTheme
         PPLogger.app.info(
-            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height)), showFooter=\(panelShowFooter), compact=\(panelCompactRows), theme=\(appTheme.rawValue)"
+            "Persisted state loaded: currentProject=\(currentProjectId ?? "nil"), defaultProject=\(defaultProjectId ?? "nil"), panelPinned=\(isPanelPinned), panelContentSize=\(Int(panelContentSize.width))x\(Int(panelContentSize.height)), panelWindowOrigin=\(panelWindowOrigin.map { "\(Int($0.x)),\(Int($0.y))" } ?? "nil"), showFooter=\(panelShowFooter), compact=\(panelCompactRows), theme=\(appTheme.rawValue)"
         )
     }
 

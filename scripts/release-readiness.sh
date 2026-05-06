@@ -208,12 +208,13 @@ log_info "Building release app"
 "${REPO_ROOT}/scripts/build-app.sh" "${build_args[@]}"
 
 APP_PATH="${OUTPUT_ROOT}/PromptPanel.app"
-ZIP_MATCHES=("${OUTPUT_ROOT}"/PromptPanel-*.zip(N))
 
 [[ -d "$APP_PATH" ]] || fail "Built app not found: $APP_PATH"
-[[ ${#ZIP_MATCHES[@]} -gt 0 ]] || fail "Built zip archive not found under $OUTPUT_ROOT"
 
-ZIP_PATH="${ZIP_MATCHES[1]}"
+SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP_PATH}/Contents/Info.plist")"
+BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${APP_PATH}/Contents/Info.plist")"
+ZIP_PATH="${OUTPUT_ROOT}/PromptPanel-${SHORT_VERSION}+${BUILD_VERSION}-macos.zip"
+[[ -f "$ZIP_PATH" ]] || fail "Expected built zip archive not found: $ZIP_PATH"
 
 log_info "Verifying code signatures"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"

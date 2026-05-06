@@ -56,27 +56,43 @@ struct QuickPanelView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Constants.VisualStyle.textTertiary)
 
-            KeyAwareSearchField(
-                text: Binding(
-                    get: { viewModel.query },
-                    set: { viewModel.query = $0 }
-                ),
-                placeholder: searchPlaceholder,
-                focusToken: viewModel.focusToken,
-                onMoveSelection: viewModel.moveSelection,
-                onSubmit: { viewModel.executeSelection(triggerSource: .keyboardSubmit) },
-                onEscape: viewModel.closePanel,
-                onFocusResolved: viewModel.handleSearchFieldFocus,
-                onCommandDigit: { digit in
-                    viewModel.executeEntry(atNumber: digit)
-                    return true
-                },
-                onCommandCopy: {
-                    viewModel.copySelectionOnly()
-                    return true
+            ZStack(alignment: .leading) {
+                if viewModel.query.isEmpty {
+                    Text(searchPlaceholder)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Constants.VisualStyle.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .padding(.leading, 4)
+                        .allowsHitTesting(false)
                 }
-            )
-            .id(viewModel.focusToken)
+
+                KeyAwareSearchField(
+                    text: Binding(
+                        get: { viewModel.query },
+                        set: { viewModel.query = $0 }
+                    ),
+                    placeholder: "",
+                    focusToken: viewModel.focusToken,
+                    onMoveSelection: viewModel.moveSelection,
+                    onSubmit: { viewModel.executeSelection(triggerSource: .keyboardSubmit) },
+                    onEscape: viewModel.closePanel,
+                    onFocusResolved: viewModel.handleSearchFieldFocus,
+                    onCommandDigit: { digit in
+                        viewModel.executeEntry(atNumber: digit)
+                        return true
+                    },
+                    onCommandCopy: {
+                        viewModel.copySelectionOnly()
+                        return true
+                    },
+                    onCommandPin: {
+                        viewModel.togglePanelPinned()
+                        return true
+                    }
+                )
+                .id(viewModel.focusToken)
+            }
             .frame(maxWidth: .infinity)
 
             if viewModel.query.isEmpty == false {
@@ -91,6 +107,7 @@ struct QuickPanelView: View {
                 .help("清除搜索")
             }
 
+            pinButton
             settingsButton
         }
         .padding(.horizontal, 12)
@@ -163,6 +180,24 @@ struct QuickPanelView: View {
         .fixedSize()
     }
 
+    private var pinButton: some View {
+        Button {
+            viewModel.togglePanelPinned()
+        } label: {
+            Image(systemName: appState.isPanelPinned ? "pin.fill" : "pin")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(appState.isPanelPinned ? Constants.VisualStyle.warn : Constants.VisualStyle.textTertiary)
+                .frame(width: Constants.Layout.compactControlHeight, height: Constants.Layout.compactControlHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(appState.isPanelPinned ? Constants.VisualStyle.warnDim : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("p", modifiers: .command)
+        .help(appState.isPanelPinned ? "取消固定（⌘P）" : "固定面板（⌘P）")
+    }
+
     private var settingsButton: some View {
         Button {
             viewModel.openSettings()
@@ -196,11 +231,7 @@ struct QuickPanelView: View {
                                 showDefaultBadge: shouldShowDefaultBadge(for: entry),
                                 isCompact: appState.panelCompactRows,
                                 onTap: {
-                                    viewModel.selectEntry(at: index)
-                                },
-                                onDoubleTap: {
-                                    viewModel.selectEntry(at: index)
-                                    viewModel.executeSelection(force: true, triggerSource: .pointerClick)
+                                    viewModel.executeEntry(at: index, triggerSource: .pointerClick)
                                 }
                             )
                             .id(entry.id)
@@ -353,10 +384,11 @@ struct QuickPanelView: View {
             hint(keys: "Esc", label: "关闭")
             hint(keys: "⌘C", label: "复制")
             hint(keys: "⌘1-9", label: "直达")
+            hint(keys: "⌘P", label: appState.isPanelPinned ? "取消固定" : "固定")
             Spacer(minLength: 0)
             Text("\(viewModel.entries.count) 条")
                 .font(.system(size: 10.5, weight: .regular, design: .monospaced))
-                .foregroundStyle(Constants.VisualStyle.textQuaternary)
+                .foregroundStyle(Constants.VisualStyle.textTertiary)
         }
         .padding(.horizontal, 12)
         .frame(height: Constants.Layout.footerHeight)
@@ -368,7 +400,7 @@ struct QuickPanelView: View {
             KbdLabel(text: keys)
             Text(label)
                 .font(.system(size: 10.5))
-                .foregroundStyle(Constants.VisualStyle.textTertiary)
+                .foregroundStyle(Constants.VisualStyle.textSecondary)
         }
     }
 
@@ -390,70 +422,81 @@ private struct PanelRow: View {
     let showDefaultBadge: Bool
     let isCompact: Bool
     let onTap: () -> Void
-    let onDoubleTap: () -> Void
 
     var body: some View {
         let type = Constants.EntryType.resolve(entry.type)
+        let level = Constants.EntryLevel.resolve(useCount: entry.useCount)
         Button(action: onTap) {
-            HStack(spacing: 10) {
-                Text(numberText)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(isSelected ? Constants.VisualStyle.accent : Constants.VisualStyle.textQuaternary)
-                    .frame(width: 16, alignment: .center)
+            GeometryReader { geometry in
+                let titleWidth = titleColumnWidth(totalWidth: geometry.size.width)
+                HStack(spacing: 10) {
+                    Text(numberText)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(isSelected ? Constants.VisualStyle.accent : Constants.VisualStyle.textQuaternary)
+                        .frame(width: 16, alignment: .center)
 
-                Image(systemName: type.symbolName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(isSelected ? Constants.VisualStyle.text : Constants.VisualStyle.textSecondary)
-                    .frame(width: 16, height: 16)
+                    Image(systemName: type.symbolName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(level.color)
+                        .frame(width: 16, height: 16)
 
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    HStack(spacing: 5) {
-                        Text(entry.title)
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Constants.VisualStyle.text)
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        HStack(spacing: 5) {
+                            Text(entry.title)
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(Constants.VisualStyle.text)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            if entry.isPinned {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundStyle(Constants.VisualStyle.warn.opacity(0.85))
+                            }
+                        }
+                        .frame(width: titleWidth, alignment: .leading)
+
+                        Text(previewText)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Constants.VisualStyle.textSecondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        if entry.isPinned {
-                            Image(systemName: "pin.fill")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(Constants.VisualStyle.warn.opacity(0.85))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    HStack(spacing: 8) {
+                        if isSelected {
+                            Text("\(entry.useCount) 次")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(level.color)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(
+                                    RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                                        .fill(level.fillColor)
+                                )
                         }
-                    }
-                    .layoutPriority(1)
-                    .frame(maxWidth: 220, alignment: .leading)
-
-                    Text(previewText)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Constants.VisualStyle.textTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                HStack(spacing: 8) {
-                    if isSelected {
-                        Text("\(entry.useCount) 次")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(Constants.VisualStyle.textQuaternary)
-                    }
-                    if showDefaultBadge {
-                        Text("通用")
+                        if showDefaultBadge {
+                            Text("通用")
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(Constants.VisualStyle.textTertiary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(
+                                    RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                                        .fill(Constants.VisualStyle.tintSubtle)
+                                )
+                        }
+                        Text(type.displayName)
                             .font(.system(size: 9.5, weight: .medium))
-                            .foregroundStyle(Constants.VisualStyle.textTertiary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(
-                                RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
-                                    .fill(Constants.VisualStyle.tintSubtle)
-                            )
+                            .foregroundStyle(isSelected ? Constants.VisualStyle.textSecondary : Constants.VisualStyle.textTertiary)
                     }
-                    Text(type.displayName)
-                        .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(isSelected ? Constants.VisualStyle.textSecondary : Constants.VisualStyle.textQuaternary)
+                    .layoutPriority(2)
+                    .fixedSize(horizontal: true, vertical: false)
                 }
+                .padding(.leading, 8)
+                .padding(.trailing, 12)
+                .frame(width: geometry.size.width, height: geometry.size.height)
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 12)
             .frame(height: isCompact ? Constants.Layout.compactRowHeight : Constants.Layout.regularRowHeight)
             .background(
                 RoundedRectangle(cornerRadius: Design.rowCornerRadius, style: .continuous)
@@ -461,10 +504,12 @@ private struct PanelRow: View {
             )
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
         .contentShape(RoundedRectangle(cornerRadius: Design.rowCornerRadius, style: .continuous))
-        .simultaneousGesture(TapGesture(count: 2).onEnded { _ in
-            onDoubleTap()
-        })
+    }
+
+    private func titleColumnWidth(totalWidth: CGFloat) -> CGFloat {
+        min(max(totalWidth * 0.28, 150), 260)
     }
 
     private var numberText: String {
