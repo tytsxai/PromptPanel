@@ -12,7 +12,7 @@ jobs:
     runs-on: macos-14
     defaults:
       run:
-        shell: zsh
+        shell: zsh {0}
 
     steps:
       - name: Checkout
