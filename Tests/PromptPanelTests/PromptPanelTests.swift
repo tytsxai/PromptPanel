@@ -1101,16 +1101,18 @@ final class PromptPanelTests: XCTestCase {
         )
 
         viewModel.prepareForPresentation()
-        let loadDeadline = Date().addingTimeInterval(1)
+        let loadDeadline = Date().addingTimeInterval(3)
         while viewModel.entries.count != 2 && Date() < loadDeadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         }
+        XCTAssertEqual(Set(viewModel.entries.map(\.id)), Set([firstEntry.id, secondEntry.id]))
         XCTAssertFalse(viewModel.isExecutionReady)
 
-        viewModel.executeEntry(at: 1, triggerSource: .pointerClick)
+        let secondEntryIndex = try XCTUnwrap(viewModel.entries.firstIndex { $0.id == secondEntry.id })
+        viewModel.executeEntry(at: secondEntryIndex, triggerSource: .pointerClick)
         let persisted = try waitForRecentExecutionLog(logRepository)
 
-        XCTAssertEqual(viewModel.selectedIndex, 1)
+        XCTAssertEqual(viewModel.selectedIndex, secondEntryIndex)
         XCTAssertEqual(persisted.entryId, secondEntry.id)
         XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.pointerClick.rawValue)
         XCTAssertEqual(persisted.result, Constants.ExecutionResult.success.rawValue)
@@ -1391,9 +1393,7 @@ final class PromptPanelTests: XCTestCase {
     }
 
     func testDatabaseManagerRecoversFromCorruptedStore() throws {
-        let brokenDatabaseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("sqlite")
+        let brokenDatabaseURL = try makeTemporaryDatabaseURL()
 
         try Data("not a sqlite database".utf8).write(to: brokenDatabaseURL)
 
@@ -1412,9 +1412,7 @@ final class PromptPanelTests: XCTestCase {
     }
 
     func testDatabaseManagerDoesNotQuarantineStoreWhenMigrationFails() throws {
-        let databaseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("sqlite")
+        let databaseURL = try makeTemporaryDatabaseURL()
 
         let queue = try DatabaseQueue(path: databaseURL.path)
         try queue.write { db in
@@ -1448,9 +1446,7 @@ final class PromptPanelTests: XCTestCase {
     }
 
     func testDatabaseManagerDoesNotQuarantineStoreWhenDatabaseIsLocked() throws {
-        let databaseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("sqlite")
+        let databaseURL = try makeTemporaryDatabaseURL()
 
         var lockingConnection: OpaquePointer?
         defer {
@@ -1526,9 +1522,7 @@ final class PromptPanelTests: XCTestCase {
     }
 
     func testMigrationsDropLegacyTagsIndex() throws {
-        let databaseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("sqlite")
+        let databaseURL = try makeTemporaryDatabaseURL()
 
         let queue = try DatabaseQueue(path: databaseURL.path)
         try queue.write { db in
@@ -2785,9 +2779,7 @@ func quickPanelWindowCanBecomeKeyAndMain() {
 
 @Test
 func databaseManagerRecoversFromCorruptedStore() throws {
-    let brokenDatabaseURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-        .appendingPathExtension("sqlite")
+    let brokenDatabaseURL = try makeTemporaryDatabaseURL()
 
     try Data("not a sqlite database".utf8).write(to: brokenDatabaseURL)
 
@@ -2804,19 +2796,21 @@ func databaseManagerRecoversFromCorruptedStore() throws {
 
 @Test
 func databaseManagerDoesNotQuarantineStoreWhenDatabaseIsLocked() throws {
-    let databaseURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-        .appendingPathExtension("sqlite")
+    let databaseURL = try makeTemporaryDatabaseURL()
 
-    let lockingQueue = try DatabaseQueue(path: databaseURL.path)
-    try lockingQueue.writeWithoutTransaction { db in
-        try db.execute(sql: "BEGIN EXCLUSIVE TRANSACTION")
-    }
+    var lockingConnection: OpaquePointer?
     defer {
-        try? lockingQueue.writeWithoutTransaction { db in
-            try db.execute(sql: "ROLLBACK TRANSACTION")
+        if let lockingConnection {
+            sqlite3_exec(lockingConnection, "ROLLBACK TRANSACTION", nil, nil, nil)
+            sqlite3_close(lockingConnection)
         }
     }
+    #expect(sqlite3_open(databaseURL.path, &lockingConnection) == SQLITE_OK)
+    let sqlite = try #require(lockingConnection)
+    var errorMessage: UnsafeMutablePointer<CChar>?
+    let beginResult = sqlite3_exec(sqlite, "BEGIN EXCLUSIVE TRANSACTION", nil, nil, &errorMessage)
+    sqlite3_free(errorMessage)
+    #expect(beginResult == SQLITE_OK)
 
     do {
         _ = try DatabaseManager(url: databaseURL)
@@ -2889,9 +2883,7 @@ func freshDatabaseDoesNotCreateUnusedTagsIndex() throws {
 
 @Test
 func migrationsDropLegacyTagsIndex() throws {
-    let databaseURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-        .appendingPathExtension("sqlite")
+    let databaseURL = try makeTemporaryDatabaseURL()
 
     let queue = try DatabaseQueue(path: databaseURL.path)
     try queue.write { db in
@@ -3128,10 +3120,14 @@ private final class FakePermissionProvider: AccessibilityPermissionProviding {
 }
 
 private func makeDatabaseManager() throws -> DatabaseManager {
-    let databaseURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-        .appendingPathExtension("sqlite")
-    return try DatabaseManager(url: databaseURL)
+    try DatabaseManager(url: makeTemporaryDatabaseURL())
+}
+
+private func makeTemporaryDatabaseURL() throws -> URL {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("PromptPanelTests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+    return directoryURL.appendingPathComponent("promptpanel.sqlite")
 }
 
 private func readRepositoryText(_ relativePath: String) throws -> String {
