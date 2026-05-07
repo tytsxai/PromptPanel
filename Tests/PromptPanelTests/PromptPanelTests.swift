@@ -146,6 +146,7 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(projects.dropFirst().map(\.name), ["000 Alpha", "ZZZ Later"])
     }
 
+    @MainActor
     func testResolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() throws {
         let defaultProjectId = UUID().uuidString
 
@@ -160,6 +161,7 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertNotNil(resolution.repairReason)
     }
 
+    @MainActor
     func testResolveCurrentProjectSelectionKeepsValidPersistedProject() throws {
         let currentProjectId = UUID().uuidString
         let defaultProjectId = UUID().uuidString
@@ -754,6 +756,7 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(result, 7)
     }
 
+    @MainActor
     func testPanelActivationPolicyPromotesAppWhenAnyWindowIsVisible() {
         XCTAssertEqual(
             PanelService.desiredActivationPolicy(isPanelVisible: true, isMainWindowVisible: false),
@@ -1246,6 +1249,7 @@ final class PromptPanelTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
     }
 
+    @MainActor
     func testTargetApplicationRestoreMismatchRequiresConfirmedDifferentBundleId() {
         XCTAssertFalse(
             ExecuteService.isTargetApplicationRestoreMismatch(
@@ -1313,19 +1317,19 @@ final class PromptPanelTests: XCTestCase {
     }
 
     @MainActor
-    func testPanelOpenTrackerRecordsDurations() {
+    func testPanelOpenTrackerRecordsDurations() throws {
         let tracker = PanelOpenTracker()
 
         tracker.markHotkeyTriggered()
         tracker.markPanelShown()
         tracker.markSearchFieldFocused(PanelFocusResult(token: 1, succeeded: true))
 
-        let trace = try? XCTUnwrap(tracker.currentTrace)
-        XCTAssertNotNil(trace ?? nil)
-        XCTAssertNotNil(trace??.hotkeyToPanelShownMs)
-        XCTAssertNotNil(trace??.hotkeyToSearchFieldFocusedMs)
+        let trace = try XCTUnwrap(tracker.currentTrace)
+        XCTAssertNotNil(trace.hotkeyToPanelShownMs)
+        XCTAssertNotNil(trace.hotkeyToSearchFieldFocusedMs)
     }
 
+    @MainActor
     func testPanelActivationActionRetriesUntilMaxAttempts() {
         let unstableSnapshot = PanelActivationSnapshot(
             appIsActive: false,
