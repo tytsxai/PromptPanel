@@ -8,6 +8,7 @@ Thanks for considering a contribution. PromptPanel is a small, intentionally foc
 2. New feature? → **open an issue first.** The PRD's product boundaries are strict; we'd rather agree on scope before you write Swift.
 3. UI change? → align with `frontend-draft/` (the visual source of truth) before touching SwiftUI/AppKit.
 4. Cloud sync / teams / workflows? → out of scope by design. See [PRD §4.2](项目快贴-PRD.md).
+5. Docs, SEO, or AI-search wording changed? → run `./scripts/check-docs.sh` and update `llms.txt`, `llms-full.txt`, `codemeta.json`, and the Schema.org metadata if needed.
 
 ## Project boundaries (read this once)
 
@@ -18,6 +19,8 @@ PromptPanel has **three** rings of features:
 - **Maybe later (4.3):** clipboard history, knowledge-base ingestion, lightweight reminders, variable templates. Only considered if they don't slow the main link.
 
 If your idea falls in 4.2, please pick a different idea. If you're unsure which ring an idea belongs to, open an issue and ask.
+
+For the current public roadmap, accepted contribution themes, and validation matrix, see [docs/路线图与贡献指南.md](docs/路线图与贡献指南.md).
 
 ## Local development
 
@@ -45,6 +48,14 @@ swift test
 ```
 
 Add tests for behaviour, not for implementation details. The most useful tests in this repo cover ordering rules, project migration, search filtering, and the execute service's clipboard fallback path.
+
+### Documentation and search gate
+
+```bash
+./scripts/check-docs.sh
+```
+
+Run this for README, FAQ, docs, metadata, SEO, LLM-index, or public positioning changes. It checks required docs, stale wording, important search keywords, CodeMeta JSON, Schema.org JSON-LD, and navigation links.
 
 ### Pre-release sanity check
 
@@ -95,6 +106,7 @@ Both English and Chinese commit messages are fine — the existing history mixes
 - Keep PRs small and focused. One concern per PR.
 - Update the relevant doc (`README.md`, `CHANGELOG.md`'s `[Unreleased]`, or `docs/`) in the same PR.
 - Tests are required for behaviour changes, optional for refactors and docs.
+- Run `./scripts/check-docs.sh` when docs, search metadata, examples, roadmap, or public positioning changes.
 - Note the OS version and architecture you tested on (e.g. *"verified on macOS 14.5, Apple Silicon"*).
 - For UI changes, attach a before/after screenshot.
 

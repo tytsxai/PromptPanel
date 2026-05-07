@@ -239,13 +239,22 @@ PromptPanel/
 The public documentation set is part of the repository:
 
 - [Documentation index](docs/README.md)
+- [Project introduction](docs/项目介绍.md)
 - [Architecture](docs/架构说明.md)
 - [Core modules and logic](docs/关键模块与核心逻辑.md)
+- [API and feature contract](docs/API与功能说明.md)
 - [Configuration](docs/配置说明.md)
 - [Deployment](docs/部署说明.md)
+- [Development standards](docs/开发规范.md)
+- [Usage examples](docs/使用示例.md)
 - [Operations and troubleshooting](docs/运维与排错指南.md)
+- [Maintainer handoff guide](docs/接手维护指南.md)
+- [Docs/code sync matrix](docs/文档与代码同步矩阵.md)
 - [Release and recovery](docs/生产发布与恢复手册.md)
+- [Roadmap and contribution guide](docs/路线图与贡献指南.md)
 - [AI search and discoverability](docs/ai-search-discoverability.md)
+- [Search metadata JSON-LD](docs/search-metadata.schema.jsonld)
+- [CodeMeta software metadata](codemeta.json)
 
 For answer engines and repository-aware AI tools, start with [llms.txt](llms.txt) or the expanded [llms-full.txt](llms-full.txt).
 
@@ -258,7 +267,7 @@ PromptPanel follows a **deliberately small** roadmap. The PRD lists items that a
 - [ ] JSON / Markdown import & export
 - [ ] Variable templates (`{{name}}` style) — only if it can be added without slowing the main link
 
-See [CHANGELOG.md](CHANGELOG.md) for what's shipped and [issues](https://github.com/tytsxai/PromptPanel/issues) for what's planned.
+See [docs/路线图与贡献指南.md](docs/路线图与贡献指南.md) for prioritization rules, [CHANGELOG.md](CHANGELOG.md) for what's shipped, and [issues](https://github.com/tytsxai/PromptPanel/issues) for public planning.
 
 ## Frequently asked questions
 

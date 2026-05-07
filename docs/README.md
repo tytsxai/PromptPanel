@@ -14,19 +14,26 @@ global hotkey -> quick panel -> search -> execute -> clipboard guarantee -> auto
 
 | Document | Purpose |
 | --- | --- |
+| [Project introduction](./项目介绍.md) | Public positioning, target users, feature boundary, and open-source entry map. |
 | [Architecture](./架构说明.md) | System shape, layers, dependencies, startup flow, and design boundaries. |
 | [Core modules and logic](./关键模块与核心逻辑.md) | Code map, main modules, search, execution, settings, and UI contracts. |
+| [API and feature contract](./API与功能说明.md) | User-facing feature contracts, internal service APIs, database schema, script interfaces, and search behavior. |
 | [Configuration](./配置说明.md) | Settings, environment variables, build flags, storage paths, and permissions. |
 | [Deployment](./部署说明.md) | What "deployment" means for a local macOS app, packaging, CI, signing, notarization, and update hosting. |
+| [Development standards](./开发规范.md) | Local setup, code organization, Swift style, UI rules, testing, docs sync, and PR expectations. |
+| [Usage examples](./使用示例.md) | Practical AI workflow, coding, terminal, QA, restore, and docs-maintenance examples. |
 | [Operations and troubleshooting](./运维与排错指南.md) | Runtime diagnosis, logs, paste failures, database recovery, and rollback thinking. |
 | [Maintainer handoff guide](./接手维护指南.md) | First-day maintainer workflow, code map, validation, release, troubleshooting, and extension rules. |
 | [Docs/code sync matrix](./文档与代码同步矩阵.md) | Which docs to update for each code, script, config, release, or UI baseline change. |
+| `scripts/check-docs.sh` | Executable documentation gate for required pages, stale wording, search metadata, AI index coverage, and local link integrity. |
 | [Release and recovery](./生产发布与恢复手册.md) | Release-readiness flow, backup/restore boundary, signing, notarization, and recovery drill. |
+| [Roadmap and contribution guide](./路线图与贡献指南.md) | Scoped roadmap, non-goals, issue/PR flow, and validation matrix. |
 | [Regression checklist](./回归清单.md) | Pre-release behavior and compatibility checks. |
 | [Compatibility regression log](./兼容性回归记录.md) | Real target-app compatibility samples and paste behavior notes. |
 | [Acceptance checklist](./验收清单.md) | UI, migration, release, and runtime acceptance points used during hardening. |
 | [Technical decisions](./技术选型.md) | Why PromptPanel uses Swift, AppKit/SwiftUI, SQLite/GRDB, KeyboardShortcuts, and Sparkle. |
 | [AI search and discoverability](./ai-search-discoverability.md) | Repository wording, AI-search keywords, and LLM/SEO maintenance rules. |
+| [Search metadata JSON-LD](./search-metadata.schema.jsonld) | Schema.org metadata block for a future website, docs site, or repository-aware search system. |
 
 Chinese-language handoff docs are intentionally kept because the original product definition and maintainer notes are Chinese. The root README and FAQ provide the English public entry layer.
 
@@ -37,6 +44,8 @@ Chinese-language handoff docs are intentionally kept because the original produc
 - [FAQ](../FAQ.md): search-friendly explanations for common user questions.
 - [llms.txt](../llms.txt): short machine-readable project index.
 - [llms-full.txt](../llms-full.txt): expanded LLM context.
+- [codemeta.json](../codemeta.json): structured open-source software metadata.
+- [Schema.org JSON-LD](./search-metadata.schema.jsonld): structured metadata for search engines and AI retrieval systems.
 - [PRD](../项目快贴-PRD.md): product scope and permanent non-goals.
 - [Contributing](../CONTRIBUTING.md): contribution rules and validation expectations.
 - [Security](../SECURITY.md): private reporting and local-data boundaries.
@@ -49,6 +58,7 @@ Chinese-language handoff docs are intentionally kept because the original produc
 - UI source of truth: `frontend-draft/`.
 - Build and release scripts: `scripts/`.
 - CI: `.github/workflows/macos-release-readiness.yml`.
+- Docs gate: `scripts/check-docs.sh`, also run by `scripts/release-readiness.sh` and CI.
 - Local database: `~/Library/Application Support/PromptPanel/promptpanel.db`.
 - Logs: `~/Library/Logs/PromptPanel/`.
 - Core guarantee: selected content is written to clipboard before automatic paste is attempted.
@@ -64,17 +74,28 @@ Update docs in the same pull request when these areas change:
 | Database, migrations, backup, restore, or storage paths | [Configuration](./配置说明.md), [Operations and troubleshooting](./运维与排错指南.md), [Release and recovery](./生产发布与恢复手册.md) |
 | Paste automation, clipboard behavior, permissions, or execution logs | [Core modules and logic](./关键模块与核心逻辑.md), [Operations and troubleshooting](./运维与排错指南.md), [Compatibility regression log](./兼容性回归记录.md) |
 | Build, signing, notarization, Sparkle, or GitHub Actions | [Deployment](./部署说明.md), [Release and recovery](./生产发布与恢复手册.md), [Configuration](./配置说明.md) |
-| Product positioning, target users, non-goals, or SEO/AI-search wording | [Root README](../README.md), [Chinese README](../README.zh-CN.md), [FAQ](../FAQ.md), [AI search and discoverability](./ai-search-discoverability.md), [llms.txt](../llms.txt), [llms-full.txt](../llms-full.txt) |
-| Documentation structure, handoff workflow, or sync policy | [Maintainer handoff guide](./接手维护指南.md), [Docs/code sync matrix](./文档与代码同步矩阵.md), this index |
+| Public feature behavior, usage examples, or internal service contracts | [API and feature contract](./API与功能说明.md), [Usage examples](./使用示例.md), [Core modules and logic](./关键模块与核心逻辑.md) |
+| Development workflow, tests, dependency policy, or PR expectations | [Development standards](./开发规范.md), [Contributing](../CONTRIBUTING.md), [Roadmap and contribution guide](./路线图与贡献指南.md) |
+| Product positioning, target users, non-goals, or SEO/AI-search wording | [Root README](../README.md), [Chinese README](../README.zh-CN.md), [FAQ](../FAQ.md), [AI search and discoverability](./ai-search-discoverability.md), [llms.txt](../llms.txt), [llms-full.txt](../llms-full.txt), [codemeta.json](../codemeta.json), [Schema.org JSON-LD](./search-metadata.schema.jsonld) |
+| Documentation structure, handoff workflow, or sync policy | [Maintainer handoff guide](./接手维护指南.md), [Docs/code sync matrix](./文档与代码同步矩阵.md), [Development standards](./开发规范.md), this index |
+
+After any code, script, CI, packaging, config, or UI-baseline change, run:
+
+```bash
+./scripts/check-docs.sh
+```
+
+This is not a full semantic proof, but it catches the failures that have caused real drift here: missing handoff pages, broken local links, undocumented `PROMPTPANEL_*` knobs, stale database names, old hotkey text, machine-local paths, missing AI-search metadata, and disconnected README/docs/llms entry points.
 
 ## First-Day Maintainer Checklist
 
 1. Run `git status --short` to understand local drift.
-2. Run `swift build`.
-3. Run `swift test` if the host has full XCTest support. If the host lacks `xctest`, use the documented build-only readiness path and say so.
-4. Run `./scripts/release-readiness.sh --output-dir /tmp/promptpanel-ready-check` for release-oriented validation.
-5. Build the `.app` with `./scripts/build-app.sh` and smoke test the packaged app, not only the command-line binary.
-6. Check the main window's Runtime Health and recent execution logs after a real paste test.
+2. Run `./scripts/check-docs.sh`.
+3. Run `swift build`.
+4. Run `swift test` if the host has full XCTest support. If the host lacks `xctest`, use the documented build-only readiness path and say so.
+5. Run `./scripts/release-readiness.sh --output-dir /tmp/promptpanel-ready-check` for release-oriented validation.
+6. Build the `.app` with `./scripts/build-app.sh` and smoke test the packaged app, not only the command-line binary.
+7. Check the main window's Runtime Health and recent execution logs after a real paste test.
 
 ## Boundaries To Preserve
 

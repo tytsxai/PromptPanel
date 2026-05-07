@@ -13,6 +13,8 @@ The format is based on Keep a Changelog, and this project uses Conventional Comm
 - Add quick-panel pin controls, including a header button and `Command-P` handling while the search field is focused.
 - Add persisted quick-panel window origin and settings controls for panel content size.
 - Add public project documentation: README files, contribution guide, FAQ, security policy, changelog, license, and issue templates.
+- Add open-source documentation pages for project introduction, API/feature contracts, development standards, usage examples, roadmap/contribution flow, AI search discoverability, CodeMeta, and Schema.org metadata.
+- Add `scripts/check-docs.sh` as the documentation, SEO, LLM-index, and structured-metadata gate used by release readiness and CI.
 
 ### Changed
 

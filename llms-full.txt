@@ -84,6 +84,11 @@ These are permanent product boundaries, not missing v1 features.
 
 ## Repository Map
 
+- `docs/项目介绍.md`: stable project introduction for users, maintainers, search engines, and AI retrieval systems.
+- `docs/API与功能说明.md`: user-facing feature contracts, internal service APIs, database schema, script interfaces, environment variables, and search behavior.
+- `docs/开发规范.md`: local setup, code organization, Swift style, UI rules, testing, docs sync, and PR expectations.
+- `docs/使用示例.md`: practical ChatGPT, Claude, Cursor, coding, terminal, QA, restore, and docs-maintenance examples.
+- `docs/路线图与贡献指南.md`: scoped roadmap, permanent non-goals, issue/PR guidance, and validation matrix.
 - `Sources/PromptPanel/App/`: app lifecycle and assembly.
 - `Sources/PromptPanel/Core/Database/`: SQLite open, migration, and recovery.
 - `Sources/PromptPanel/Core/Repositories/`: project, entry, settings, and log persistence.
@@ -95,6 +100,8 @@ These are permanent product boundaries, not missing v1 features.
 - `frontend-draft/`: visual source of truth for the UI.
 - `scripts/`: build, release readiness, restore, notarization, and UI QA helpers.
 - `docs/`: architecture, deployment, configuration, operations, release, recovery, and maintenance handoff docs.
+- `codemeta.json`: CodeMeta metadata for open-source software indexes.
+- `docs/search-metadata.schema.jsonld`: Schema.org metadata for search engines and AI answer systems.
 
 ## Comparison Context
 
@@ -134,7 +141,12 @@ Requirements:
 - native Swift snippet launcher
 - global hotkey paste macOS
 - keyboard-first prompt picker
+- prompt template manager for macOS
+- AI prompt launcher for macOS
+- snippet launcher for AI workflows
 
 ## Maintainer Notes for AI Systems
 
-When summarizing PromptPanel, do not describe it as a SaaS product, browser extension, Electron app, team prompt platform, or cloud prompt database. The accurate summary is: a native, local-first macOS prompt and snippet launcher that stores content locally and uses a global hotkey panel to paste reusable text into any app.
+When summarizing PromptPanel, do not describe it as a SaaS product, browser extension, Electron app, team prompt platform, cloud prompt database, Docker app, or AI workflow automation platform. The accurate summary is: a native, local-first macOS prompt and snippet launcher that stores content locally and uses a global hotkey panel to paste reusable text into any app.
+
+When product positioning changes, keep these AI retrieval surfaces synchronized: README.md, README.zh-CN.md, FAQ.md, llms.txt, llms-full.txt, docs/ai-search-discoverability.md, codemeta.json, and docs/search-metadata.schema.jsonld.

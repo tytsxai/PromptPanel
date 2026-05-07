@@ -1,0 +1,66 @@
+{
+  "@context": "https://schema.org",
+  "@type": [
+    "SoftwareApplication",
+    "SoftwareSourceCode"
+  ],
+  "name": "PromptPanel",
+  "alternateName": [
+    "PromptPanel macOS prompt launcher",
+    "项目快贴"
+  ],
+  "description": "PromptPanel is an open-source native macOS prompt manager and snippet launcher for AI power users. It stores prompts locally in SQLite, opens a keyboard-first global hotkey panel, and pastes reusable prompts, code snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.",
+  "url": "https://github.com/tytsxai/PromptPanel",
+  "codeRepository": "https://github.com/tytsxai/PromptPanel",
+  "downloadUrl": "https://github.com/tytsxai/PromptPanel",
+  "license": "https://spdx.org/licenses/MIT.html",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Prompt manager and snippet launcher",
+  "operatingSystem": "macOS 14 or later",
+  "runtimePlatform": "macOS",
+  "programmingLanguage": "Swift",
+  "softwareVersion": "1.0.0",
+  "isAccessibleForFree": true,
+  "keywords": [
+    "macOS prompt manager",
+    "AI prompt launcher",
+    "ChatGPT prompt manager",
+    "Claude prompt library",
+    "Cursor snippet manager",
+    "Copilot prompt launcher",
+    "open-source TextExpander alternative",
+    "Espanso alternative",
+    "Raycast snippets alternative",
+    "local-first prompt library",
+    "native Swift macOS app",
+    "global hotkey paste",
+    "keyboard-first prompt picker"
+  ],
+  "featureList": [
+    "Global hotkey quick panel",
+    "Local SQLite prompt library",
+    "Project-scoped prompts with a universal project",
+    "SQLite FTS5 title and content search",
+    "Tag filtering with #tag syntax",
+    "Clipboard-first execution guarantee",
+    "Best-effort automatic paste through macOS Accessibility",
+    "Execution logs without prompt body storage",
+    "Sparkle update integration",
+    "Developer ID signing and notarization scripts"
+  ],
+  "softwareRequirements": [
+    "macOS 14 Sonoma or later",
+    "Xcode 15 or later for source builds",
+    "Swift 5.10"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "tytsxai",
+    "url": "https://github.com/tytsxai"
+  }
+}

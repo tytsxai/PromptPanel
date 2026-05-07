@@ -1,0 +1,55 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "PromptPanel",
+  "description": "Open-source native macOS prompt manager and snippet launcher for AI power users. PromptPanel is a ChatGPT prompt manager, Claude prompt library, Cursor snippet manager, and local-first prompt library that stores reusable prompts locally in SQLite and uses a global hotkey panel to paste them into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any text field.",
+  "version": "1.0.0",
+  "codeRepository": "https://github.com/tytsxai/PromptPanel",
+  "issueTracker": "https://github.com/tytsxai/PromptPanel/issues",
+  "license": "https://spdx.org/licenses/MIT.html",
+  "programmingLanguage": "Swift",
+  "runtimePlatform": "macOS",
+  "operatingSystem": "macOS 14 or later",
+  "applicationCategory": "DeveloperApplication",
+  "keywords": [
+    "macos",
+    "swift",
+    "prompt-manager",
+    "macOS prompt manager",
+    "ai-prompts",
+    "ChatGPT prompt manager",
+    "Claude prompt library",
+    "Cursor snippet manager",
+    "snippet-manager",
+    "chatgpt",
+    "claude",
+    "cursor",
+    "copilot",
+    "local-first",
+    "local-first prompt library",
+    "sqlite",
+    "productivity",
+    "global-hotkey",
+    "textexpander-alternative",
+    "raycast-alternative"
+  ],
+  "softwareRequirements": [
+    "macOS 14+",
+    "Xcode 15+ for source builds",
+    "Swift 5.10"
+  ],
+  "author": [
+    {
+      "@type": "Person",
+      "givenName": "tytsxai",
+      "url": "https://github.com/tytsxai"
+    }
+  ],
+  "maintainer": [
+    {
+      "@type": "Person",
+      "givenName": "tytsxai",
+      "url": "https://github.com/tytsxai"
+    }
+  ]
+}

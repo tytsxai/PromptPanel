@@ -24,10 +24,18 @@ Important links:
 - Security: ./SECURITY.md
 - Product PRD: ./项目快贴-PRD.md
 - Documentation index: ./docs/README.md
+- Project introduction: ./docs/项目介绍.md
 - Architecture: ./docs/架构说明.md
+- API and feature contract: ./docs/API与功能说明.md
+- Development standards: ./docs/开发规范.md
+- Usage examples: ./docs/使用示例.md
+- Roadmap and contribution guide: ./docs/路线图与贡献指南.md
 - Deployment: ./docs/部署说明.md
 - Operations and troubleshooting: ./docs/运维与排错指南.md
 - Technical decisions: ./docs/技术选型.md
+- Search and AI discoverability: ./docs/ai-search-discoverability.md
+- CodeMeta software metadata: ./codemeta.json
+- Schema.org search metadata: ./docs/search-metadata.schema.jsonld
 - Full LLM context: ./llms-full.txt
 
 Canonical repository:
@@ -48,3 +56,5 @@ Useful search phrases:
 - native Swift NSPanel app
 - global hotkey paste macOS
 - keyboard-first prompt picker
+- prompt template manager for macOS
+- Copilot prompt template launcher
