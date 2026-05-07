@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftUI
 @testable import PromptPanel
 import KeyboardShortcuts
@@ -1351,6 +1352,7 @@ final class PromptPanelTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testPanelVisibilityCoordinatorTransitions() {
         let coordinator = PanelVisibilityCoordinator()
 
