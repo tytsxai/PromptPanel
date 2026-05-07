@@ -22,12 +22,13 @@ Usage: scripts/release-readiness.sh [options]
 
 Runs the local release-readiness checks for PromptPanel:
   1. validate shell script syntax
-  2. build the Swift package
-  3. run swift test
-  4. build a release .app and zip
-  5. verify code signatures
-  6. smoke-launch the built app with isolated data directories
-  7. hand off the signed archive to notarization via scripts/notarize-app.sh when needed
+  2. validate documentation structure, search metadata, and sync guardrails
+  3. build the Swift package
+  4. run swift test
+  5. build a release .app and zip
+  6. verify code signatures
+  7. smoke-launch the built app with isolated data directories
+  8. hand off the signed archive to notarization via scripts/notarize-app.sh when needed
 
 Options:
   --output-dir <path>          Output directory for the release bundle.
@@ -151,9 +152,13 @@ mkdir -p "$OUTPUT_ROOT"
 log_info "Validating shell scripts"
 zsh -n "${REPO_ROOT}/scripts/build-app.sh"
 zsh -n "${REPO_ROOT}/scripts/launch-computer-use.sh"
+zsh -n "${REPO_ROOT}/scripts/check-docs.sh"
 zsh -n "${REPO_ROOT}/scripts/notarize-app.sh"
 zsh -n "${REPO_ROOT}/scripts/restore-backup.sh"
 zsh -n "${REPO_ROOT}/scripts/release-readiness.sh"
+
+log_info "Validating documentation consistency"
+"${REPO_ROOT}/scripts/check-docs.sh"
 
 TEST_RUNNER_AVAILABLE=0
 if xcrun --find xctest >/dev/null 2>&1; then

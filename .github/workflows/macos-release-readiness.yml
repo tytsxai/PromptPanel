@@ -32,8 +32,12 @@ jobs:
       - name: Validate shell scripts
         run: |
           zsh -n scripts/build-app.sh
+          zsh -n scripts/check-docs.sh
           zsh -n scripts/restore-backup.sh
           zsh -n scripts/release-readiness.sh
+
+      - name: Validate documentation consistency
+        run: scripts/check-docs.sh
 
       - name: Restore script validates safe targets and rejects invalid backups
         run: |
