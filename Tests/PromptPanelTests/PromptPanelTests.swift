@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import SQLite3
 import SwiftUI
 @testable import PromptPanel
 import KeyboardShortcuts
@@ -147,10 +148,10 @@ final class PromptPanelTests: XCTestCase {
     }
 
     @MainActor
-    func testResolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() throws {
+    func testResolveCurrentProjectSelectionFallsBackToDefaultWhenPersistedProjectIsDangling() {
         let defaultProjectId = UUID().uuidString
 
-        let resolution = try AppDelegate.resolveCurrentProjectSelection(
+        let resolution = AppDelegate.resolveCurrentProjectSelection(
             persistedCurrentProjectId: "missing-project",
             defaultProjectId: defaultProjectId,
             currentProjectExists: { $0 == defaultProjectId }
@@ -162,11 +163,11 @@ final class PromptPanelTests: XCTestCase {
     }
 
     @MainActor
-    func testResolveCurrentProjectSelectionKeepsValidPersistedProject() throws {
+    func testResolveCurrentProjectSelectionKeepsValidPersistedProject() {
         let currentProjectId = UUID().uuidString
         let defaultProjectId = UUID().uuidString
 
-        let resolution = try AppDelegate.resolveCurrentProjectSelection(
+        let resolution = AppDelegate.resolveCurrentProjectSelection(
             persistedCurrentProjectId: currentProjectId,
             defaultProjectId: defaultProjectId,
             currentProjectExists: { $0 == currentProjectId }
@@ -1451,15 +1452,20 @@ final class PromptPanelTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("sqlite")
 
-        let lockingQueue = try DatabaseQueue(path: databaseURL.path)
-        try lockingQueue.writeWithoutTransaction { db in
-            try db.execute(sql: "BEGIN EXCLUSIVE TRANSACTION")
-        }
+        var lockingConnection: OpaquePointer?
         defer {
-            try? lockingQueue.writeWithoutTransaction { db in
-                try db.execute(sql: "ROLLBACK TRANSACTION")
+            if let lockingConnection {
+                sqlite3_exec(lockingConnection, "ROLLBACK TRANSACTION", nil, nil, nil)
+                sqlite3_close(lockingConnection)
             }
         }
+        XCTAssertEqual(sqlite3_open(databaseURL.path, &lockingConnection), SQLITE_OK)
+        let sqlite = try XCTUnwrap(lockingConnection)
+        var errorMessage: UnsafeMutablePointer<CChar>?
+        let beginResult = sqlite3_exec(sqlite, "BEGIN EXCLUSIVE TRANSACTION", nil, nil, &errorMessage)
+        let beginError = errorMessage.map { String(cString: $0) } ?? "unknown SQLite error"
+        sqlite3_free(errorMessage)
+        XCTAssertEqual(beginResult, SQLITE_OK, beginError)
 
         XCTAssertThrowsError(try DatabaseManager(url: databaseURL)) { error in
             guard case DatabaseManager.InitializationError.storeBusyPreservingStore = error else {
