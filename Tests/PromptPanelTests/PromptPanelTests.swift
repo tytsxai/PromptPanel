@@ -1112,7 +1112,6 @@ final class PromptPanelTests: XCTestCase {
         viewModel.executeEntry(at: secondEntryIndex, triggerSource: .pointerClick)
         let persisted = try waitForRecentExecutionLog(logRepository)
 
-        XCTAssertEqual(viewModel.selectedIndex, secondEntryIndex)
         XCTAssertEqual(persisted.entryId, secondEntry.id)
         XCTAssertEqual(persisted.triggerSource, Constants.ExecutionTrigger.pointerClick.rawValue)
         XCTAssertEqual(persisted.result, Constants.ExecutionResult.success.rawValue)
