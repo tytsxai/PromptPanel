@@ -267,6 +267,7 @@ final class QuickPanelViewModel: ObservableObject {
                     if let tagFilter {
                         entries = entries.filter { $0.tags.contains(tagFilter) }
                     }
+                    entries = Self.applyPanelRankingSort(entries, currentProjectId: effectiveCurrentProjectId)
                     result = .success(entries)
                 } catch {
                     result = .failure(error)
@@ -331,6 +332,37 @@ final class QuickPanelViewModel: ObservableObject {
     private func setStatus(_ message: String, tone: StatusTone) {
         statusMessage = message
         statusTone = tone
+    }
+
+    /// Order panel results to match the library's default "按使用" ranking:
+    /// pinned first, then by `useCount` DESC so the level/color tiers visible
+    /// in the library appear in the same order in the panel. Recency and
+    /// current-project priority break ties so equally-used entries still
+    /// surface the most recently touched and the user's active project first.
+    nonisolated static func applyPanelRankingSort(_ entries: [Entry], currentProjectId: String) -> [Entry] {
+        entries.sorted { lhs, rhs in
+            if lhs.isPinned != rhs.isPinned {
+                return lhs.isPinned
+            }
+            if lhs.useCount != rhs.useCount {
+                return lhs.useCount > rhs.useCount
+            }
+            let lhsDate = lhs.lastUsedAt ?? lhs.updatedAt
+            let rhsDate = rhs.lastUsedAt ?? rhs.updatedAt
+            if lhsDate != rhsDate {
+                return lhsDate > rhsDate
+            }
+            let lhsCurrent = lhs.projectId == currentProjectId
+            let rhsCurrent = rhs.projectId == currentProjectId
+            if lhsCurrent != rhsCurrent {
+                return lhsCurrent
+            }
+            let titleComparison = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+            if titleComparison != .orderedSame {
+                return titleComparison == .orderedAscending
+            }
+            return lhs.id < rhs.id
+        }
     }
 
     /// Extracts the first `#tag` token from the query, returning the remaining

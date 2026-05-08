@@ -464,17 +464,15 @@ private struct PanelRow: View {
                     }
 
                     HStack(spacing: 8) {
-                        if isSelected {
-                            Text("\(entry.useCount) 次")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(level.color)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(
-                                    RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
-                                        .fill(level.fillColor)
-                                )
-                        }
+                        Text("\(entry.useCount) 次")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(level.color)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: Constants.Layout.badgeCornerRadius, style: .continuous)
+                                    .fill(level.fillColor)
+                            )
                         if showDefaultBadge {
                             Text("通用")
                                 .font(.system(size: 9.5, weight: .medium))
