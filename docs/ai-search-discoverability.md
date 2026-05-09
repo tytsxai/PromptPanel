@@ -71,9 +71,9 @@ Primary docs for crawlers and LLMs:
 
 - `README.md`
 - `README.zh-CN.md`
-- `FAQ.md`
+- `docs/FAQ.md`
 - `llms.txt`
-- `llms-full.txt`
+- `docs/ai-search/llms-full.txt`
 - `codemeta.json`
 - `docs/README.md`
 - `docs/项目介绍.md`
@@ -94,13 +94,13 @@ Treat these as the search index for the project:
 | --- | --- |
 | `README.md` | Primary English GitHub landing page. |
 | `README.zh-CN.md` | Primary Chinese landing page. |
-| `FAQ.md` | Searchable Q&A for privacy, permissions, build, alternatives, and roadmap questions. |
+| `docs/FAQ.md` | Searchable Q&A for privacy, permissions, build, alternatives, and roadmap questions. |
 | `docs/项目介绍.md` | Stable project introduction for users, maintainers, search engines, and AI retrieval. |
 | `docs/API与功能说明.md` | Feature contract, internal service contracts, database schema, script interfaces, and search behavior. |
 | `docs/使用示例.md` | Practical ChatGPT, Claude, Cursor, terminal, QA, restore, and docs-maintenance examples. |
 | `docs/路线图与贡献指南.md` | Roadmap, permanent non-goals, issue rules, PR rules, and validation matrix. |
 | `llms.txt` | Short AI-readable project index. |
-| `llms-full.txt` | Expanded LLM and answer-engine context. |
+| `docs/ai-search/llms-full.txt` | Expanded LLM and answer-engine context. |
 | `codemeta.json` | CodeMeta metadata for open-source software indexes. |
 | `docs/search-metadata.schema.jsonld` | Schema.org JSON-LD for a future docs site, project page, or AI retrieval system. |
 
@@ -129,7 +129,7 @@ The README should continue to include:
 - Install/build instructions.
 - Privacy and local-first explanation.
 - Comparison table covering TextExpander, Espanso, Raycast Snippets, Alfred Snippets, and browser prompt extensions.
-- Links to docs, FAQ, roadmap/contribution guide, `llms.txt`, `llms-full.txt`, CodeMeta, and Schema.org JSON-LD metadata.
+- Links to docs, FAQ, roadmap/contribution guide, `llms.txt`, `docs/ai-search/llms-full.txt`, CodeMeta, and Schema.org JSON-LD metadata.
 
 ## Release note SEO checklist
 
@@ -141,7 +141,7 @@ Each public release should include:
 - Install/build instructions or release artifact links.
 - Known limitations.
 - Privacy note if data, logs, backup, restore, or updater behavior changed.
-- Links back to `README.md`, `FAQ.md`, and `docs/路线图与贡献指南.md`.
+- Links back to `README.md`, `docs/FAQ.md`, and `docs/路线图与贡献指南.md`.
 
 ## Validation
 
@@ -166,9 +166,9 @@ When the product positioning changes, update these files in the same pull reques
 
 - `README.md`
 - `README.zh-CN.md`
-- `FAQ.md`
+- `docs/FAQ.md`
 - `llms.txt`
-- `llms-full.txt`
+- `docs/ai-search/llms-full.txt`
 - `codemeta.json`
 - `docs/ai-search-discoverability.md`
 - `docs/search-metadata.schema.jsonld`

@@ -42,7 +42,7 @@ The clipboard write happens first and is treated as the durable fallback. If pas
 
 ## Can I sync prompts through the cloud or use teams?
 
-No. Cloud sync, team collaboration, and complex workflow orchestration are permanent non-goals in `项目快贴-PRD.md`. PromptPanel is intentionally single-user and local-first.
+No. Cloud sync, team collaboration, and complex workflow orchestration are permanent non-goals in `docs/项目快贴-PRD.md`. PromptPanel is intentionally single-user and local-first.
 
 ## Does PromptPanel have a public API?
 

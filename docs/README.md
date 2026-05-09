@@ -34,6 +34,7 @@ global hotkey -> quick panel -> search -> execute -> clipboard guarantee -> auto
 | [Technical decisions](./技术选型.md) | Why PromptPanel uses Swift, AppKit/SwiftUI, SQLite/GRDB, KeyboardShortcuts, and Sparkle. |
 | [AI search and discoverability](./ai-search-discoverability.md) | Repository wording, AI-search keywords, and LLM/SEO maintenance rules. |
 | [Search metadata JSON-LD](./search-metadata.schema.jsonld) | Schema.org metadata block for a future website, docs site, or repository-aware search system. |
+| [Root directory cleanup log](./根目录整理记录-2026-05-09.md) | Current root layout boundary, moved entry points, and recyclable build-output cleanup. |
 
 Chinese-language handoff docs are intentionally kept because the original product definition and maintainer notes are Chinese. The root README and FAQ provide the English public entry layer.
 
@@ -41,14 +42,14 @@ Chinese-language handoff docs are intentionally kept because the original produc
 
 - [Root README](../README.md): public product overview and build instructions.
 - [Chinese README](../README.zh-CN.md): Chinese public product overview.
-- [FAQ](../FAQ.md): search-friendly explanations for common user questions.
+- [FAQ](./FAQ.md): search-friendly explanations for common user questions.
 - [llms.txt](../llms.txt): short machine-readable project index.
-- [llms-full.txt](../llms-full.txt): expanded LLM context.
+- [llms-full.txt](./ai-search/llms-full.txt): expanded LLM context.
 - [codemeta.json](../codemeta.json): structured open-source software metadata.
 - [Schema.org JSON-LD](./search-metadata.schema.jsonld): structured metadata for search engines and AI retrieval systems.
-- [PRD](../项目快贴-PRD.md): product scope and permanent non-goals.
-- [Contributing](../CONTRIBUTING.md): contribution rules and validation expectations.
-- [Security](../SECURITY.md): private reporting and local-data boundaries.
+- [PRD](./项目快贴-PRD.md): product scope and permanent non-goals.
+- [Contributing](../.github/CONTRIBUTING.md): contribution rules and validation expectations.
+- [Security](../.github/SECURITY.md): private reporting and local-data boundaries.
 
 ## Current System Facts
 
@@ -75,8 +76,8 @@ Update docs in the same pull request when these areas change:
 | Paste automation, clipboard behavior, permissions, or execution logs | [Core modules and logic](./关键模块与核心逻辑.md), [Operations and troubleshooting](./运维与排错指南.md), [Compatibility regression log](./兼容性回归记录.md) |
 | Build, signing, notarization, Sparkle, or GitHub Actions | [Deployment](./部署说明.md), [Release and recovery](./生产发布与恢复手册.md), [Configuration](./配置说明.md) |
 | Public feature behavior, usage examples, or internal service contracts | [API and feature contract](./API与功能说明.md), [Usage examples](./使用示例.md), [Core modules and logic](./关键模块与核心逻辑.md) |
-| Development workflow, tests, dependency policy, or PR expectations | [Development standards](./开发规范.md), [Contributing](../CONTRIBUTING.md), [Roadmap and contribution guide](./路线图与贡献指南.md) |
-| Product positioning, target users, non-goals, or SEO/AI-search wording | [Root README](../README.md), [Chinese README](../README.zh-CN.md), [FAQ](../FAQ.md), [AI search and discoverability](./ai-search-discoverability.md), [llms.txt](../llms.txt), [llms-full.txt](../llms-full.txt), [codemeta.json](../codemeta.json), [Schema.org JSON-LD](./search-metadata.schema.jsonld) |
+| Development workflow, tests, dependency policy, or PR expectations | [Development standards](./开发规范.md), [Contributing](../.github/CONTRIBUTING.md), [Roadmap and contribution guide](./路线图与贡献指南.md) |
+| Product positioning, target users, non-goals, or SEO/AI-search wording | [Root README](../README.md), [Chinese README](../README.zh-CN.md), [FAQ](./FAQ.md), [AI search and discoverability](./ai-search-discoverability.md), [llms.txt](../llms.txt), [llms-full.txt](./ai-search/llms-full.txt), [codemeta.json](../codemeta.json), [Schema.org JSON-LD](./search-metadata.schema.jsonld) |
 | Documentation structure, handoff workflow, or sync policy | [Maintainer handoff guide](./接手维护指南.md), [Docs/code sync matrix](./文档与代码同步矩阵.md), [Development standards](./开发规范.md), this index |
 
 After any code, script, CI, packaging, config, or UI-baseline change, run:

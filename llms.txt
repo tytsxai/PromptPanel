@@ -18,11 +18,11 @@ Important links:
 
 - README: ./README.md
 - Chinese README: ./README.zh-CN.md
-- FAQ: ./FAQ.md
+- FAQ: ./docs/FAQ.md
 - Changelog: ./CHANGELOG.md
-- Contributing: ./CONTRIBUTING.md
-- Security: ./SECURITY.md
-- Product PRD: ./项目快贴-PRD.md
+- Contributing: ./.github/CONTRIBUTING.md
+- Security: ./.github/SECURITY.md
+- Product PRD: ./docs/项目快贴-PRD.md
 - Documentation index: ./docs/README.md
 - Project introduction: ./docs/项目介绍.md
 - Architecture: ./docs/架构说明.md
@@ -36,7 +36,7 @@ Important links:
 - Search and AI discoverability: ./docs/ai-search-discoverability.md
 - CodeMeta software metadata: ./codemeta.json
 - Schema.org search metadata: ./docs/search-metadata.schema.jsonld
-- Full LLM context: ./llms-full.txt
+- Full LLM context: ./docs/ai-search/llms-full.txt
 
 Canonical repository:
 

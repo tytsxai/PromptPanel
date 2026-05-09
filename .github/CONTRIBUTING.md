@@ -7,8 +7,8 @@ Thanks for considering a contribution. PromptPanel is a small, intentionally foc
 1. Bug fix or small UX polish? → open a PR, reference an issue if one exists.
 2. New feature? → **open an issue first.** The PRD's product boundaries are strict; we'd rather agree on scope before you write Swift.
 3. UI change? → align with `frontend-draft/` (the visual source of truth) before touching SwiftUI/AppKit.
-4. Cloud sync / teams / workflows? → out of scope by design. See [PRD §4.2](项目快贴-PRD.md).
-5. Docs, SEO, or AI-search wording changed? → run `./scripts/check-docs.sh` and update `llms.txt`, `llms-full.txt`, `codemeta.json`, and the Schema.org metadata if needed.
+4. Cloud sync / teams / workflows? → out of scope by design. See [PRD §4.2](../docs/项目快贴-PRD.md).
+5. Docs, SEO, or AI-search wording changed? → run `./scripts/check-docs.sh` and update `llms.txt`, `docs/ai-search/llms-full.txt`, `codemeta.json`, and the Schema.org metadata if needed.
 
 ## Project boundaries (read this once)
 
@@ -20,7 +20,7 @@ PromptPanel has **three** rings of features:
 
 If your idea falls in 4.2, please pick a different idea. If you're unsure which ring an idea belongs to, open an issue and ask.
 
-For the current public roadmap, accepted contribution themes, and validation matrix, see [docs/路线图与贡献指南.md](docs/路线图与贡献指南.md).
+For the current public roadmap, accepted contribution themes, and validation matrix, see [docs/路线图与贡献指南.md](../docs/路线图与贡献指南.md).
 
 ## Local development
 

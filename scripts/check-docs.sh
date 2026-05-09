@@ -43,7 +43,9 @@ check_markdown_links() {
         files+=("$file")
     done < <(
         {
-            printf '%s\n' README.md README.zh-CN.md FAQ.md CONTRIBUTING.md SECURITY.md CHANGELOG.md 项目快贴-PRD.md llms.txt llms-full.txt
+            printf '%s\n' README.md README.zh-CN.md CHANGELOG.md llms.txt \
+                docs/FAQ.md docs/项目快贴-PRD.md docs/ai-search/llms-full.txt \
+                .github/CONTRIBUTING.md .github/SECURITY.md .github/CODE_OF_CONDUCT.md
             find docs .github -type f \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' \) -print
         } | sort -u
     )
@@ -82,13 +84,15 @@ check_markdown_links() {
 required_files=(
     "README.md"
     "README.zh-CN.md"
-    "FAQ.md"
-    "CONTRIBUTING.md"
-    "SECURITY.md"
+    "docs/FAQ.md"
+    "docs/项目快贴-PRD.md"
+    ".github/CONTRIBUTING.md"
+    ".github/SECURITY.md"
+    ".github/CODE_OF_CONDUCT.md"
     "CHANGELOG.md"
     "LICENSE"
     "llms.txt"
-    "llms-full.txt"
+    "docs/ai-search/llms-full.txt"
     "codemeta.json"
     "docs/README.md"
     "docs/项目介绍.md"
@@ -155,7 +159,7 @@ metadata_needles=(
 
 for needle in "${metadata_needles[@]}"; do
     check_contains "llms.txt" "$needle"
-    check_contains "llms-full.txt" "$needle"
+    check_contains "docs/ai-search/llms-full.txt" "$needle"
     check_contains "docs/ai-search-discoverability.md" "$needle"
     check_contains "codemeta.json" "$needle"
 done
@@ -164,7 +168,7 @@ check_contains "docs/search-metadata.schema.jsonld" "SoftwareApplication"
 check_contains "docs/search-metadata.schema.jsonld" "SoftwareSourceCode"
 check_contains "docs/ai-search-discoverability.md" "llms.txt"
 check_contains "docs/ai-search-discoverability.md" "Schema.org"
-check_contains "CONTRIBUTING.md" "./scripts/check-docs.sh"
+check_contains ".github/CONTRIBUTING.md" "./scripts/check-docs.sh"
 check_contains "docs/开发规范.md" "./scripts/check-docs.sh"
 check_contains "docs/文档与代码同步矩阵.md" "./scripts/check-docs.sh"
 check_contains ".github/workflows/macos-release-readiness.yml" "scripts/check-docs.sh"
@@ -190,7 +194,7 @@ top_level_scripts=(
 )
 
 for script in "${top_level_scripts[@]}"; do
-    if ! grep -R -Fq -- "$script" README.md README.zh-CN.md CONTRIBUTING.md docs .github; then
+    if ! grep -R -Fq -- "$script" README.md README.zh-CN.md docs .github; then
         fail "Maintenance script is not documented: $script"
     fi
 done
@@ -222,10 +226,10 @@ info "Checking for stale public documentation terms"
 stale_scan_files=(
     "README.md"
     "README.zh-CN.md"
-    "FAQ.md"
-    "CONTRIBUTING.md"
+    "docs/FAQ.md"
+    ".github/CONTRIBUTING.md"
     "llms.txt"
-    "llms-full.txt"
+    "docs/ai-search/llms-full.txt"
     "docs/README.md"
     "docs/项目介绍.md"
     "docs/架构说明.md"

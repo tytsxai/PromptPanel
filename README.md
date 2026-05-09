@@ -13,9 +13,9 @@ A native, local-first macOS app that lets you summon a quick panel with a global
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange.svg)](https://swift.org)
 [![Apple Silicon & Intel](https://img.shields.io/badge/Arch-Apple%20Silicon%20%26%20Intel-blue.svg)](#installation)
 [![Local-first · No cloud](https://img.shields.io/badge/Local--first-No%20cloud-brightgreen.svg)](#privacy--data)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-success.svg)](CONTRIBUTING.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-success.svg)](.github/CONTRIBUTING.md)
 
-[**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**FAQ**](FAQ.md) · [**Docs**](docs/README.md) · [**LLM index**](llms.txt) · [**Changelog**](CHANGELOG.md) · [**Contributing**](CONTRIBUTING.md)
+[**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**FAQ**](docs/FAQ.md) · [**Docs**](docs/README.md) · [**LLM index**](llms.txt) · [**Changelog**](CHANGELOG.md) · [**Contributing**](.github/CONTRIBUTING.md)
 
 <img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel summoned over a text editor — search and paste prompts in milliseconds" width="780" />
 
@@ -78,7 +78,7 @@ If "I copy and paste the same multiline prompt twenty times a day" describes you
 
 ### Explicitly *not* doing (project boundaries)
 
-By design PromptPanel will **never** add cloud sync, team collaboration, or complex workflow orchestration. These are not "later" — they are out of scope forever. The tool is a single-user, local-only utility, and that is the point. See [PRD §4.2](项目快贴-PRD.md) for the rationale.
+By design PromptPanel will **never** add cloud sync, team collaboration, or complex workflow orchestration. These are not "later" — they are out of scope forever. The tool is a single-user, local-only utility, and that is the point. See [PRD §4.2](docs/项目快贴-PRD.md) for the rationale.
 
 ## Screenshots
 
@@ -228,10 +228,11 @@ PromptPanel/
 ├── Tests/PromptPanelTests/
 ├── frontend-draft/       # UI source-of-truth (HTML/JSX mockups + screenshots)
 ├── scripts/              # build-app.sh, notarize, release readiness, restore
-├── docs/                 # public architecture, release, ops, and handoff docs
+├── docs/                 # public architecture, FAQ, PRD, release, ops, handoff docs
+├── .github/              # contribution, security, conduct, issue/PR templates, CI
 ├── llms.txt              # short AI-search / LLM-readable project index
-├── llms-full.txt         # expanded LLM reference for answer engines
-└── .github/workflows/    # macOS release readiness CI
+├── codemeta.json         # structured open-source software metadata
+└── Package.swift         # SwiftPM package definition
 ```
 
 ## Documentation
@@ -239,6 +240,8 @@ PromptPanel/
 The public documentation set is part of the repository:
 
 - [Documentation index](docs/README.md)
+- [FAQ](docs/FAQ.md)
+- [Product PRD](docs/项目快贴-PRD.md)
 - [Project introduction](docs/项目介绍.md)
 - [Architecture](docs/架构说明.md)
 - [Core modules and logic](docs/关键模块与核心逻辑.md)
@@ -253,10 +256,13 @@ The public documentation set is part of the repository:
 - [Release and recovery](docs/生产发布与恢复手册.md)
 - [Roadmap and contribution guide](docs/路线图与贡献指南.md)
 - [AI search and discoverability](docs/ai-search-discoverability.md)
+- [Full LLM context](docs/ai-search/llms-full.txt)
 - [Search metadata JSON-LD](docs/search-metadata.schema.jsonld)
+- [Contributing](.github/CONTRIBUTING.md)
+- [Security](.github/SECURITY.md)
 - [CodeMeta software metadata](codemeta.json)
 
-For answer engines and repository-aware AI tools, start with [llms.txt](llms.txt) or the expanded [llms-full.txt](llms-full.txt).
+For answer engines and repository-aware AI tools, start with [llms.txt](llms.txt) or the expanded [llms-full.txt](docs/ai-search/llms-full.txt).
 
 ## Roadmap
 
@@ -271,7 +277,7 @@ See [docs/路线图与贡献指南.md](docs/路线图与贡献指南.md) for pri
 
 ## Frequently asked questions
 
-For a longer FAQ, see [FAQ.md](FAQ.md). The greatest hits:
+For a longer FAQ, see [FAQ.md](docs/FAQ.md). The greatest hits:
 
 ### Is PromptPanel free?
 
@@ -291,7 +297,7 @@ To synthesize a `⌘V` keystroke after the panel hides and your previous app reg
 
 ### Will you add cloud sync / team sharing / workflows?
 
-No, deliberately. Those are listed as **permanent non-goals** in the [PRD §4.2](项目快贴-PRD.md). The product's identity is "single-user, local-only, fast." Adding any of those would change what the product is.
+No, deliberately. Those are listed as **permanent non-goals** in the [PRD §4.2](docs/项目快贴-PRD.md). The product's identity is "single-user, local-only, fast." Adding any of those would change what the product is.
 
 ### Why not Electron / Tauri?
 
@@ -307,7 +313,7 @@ Import is on the roadmap; for now you can write directly to the SQLite file or p
 
 ## Contributing
 
-PRs welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) first. Two non-obvious rules:
+PRs welcome — please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) first. Two non-obvious rules:
 
 1. **UI changes must align with `frontend-draft/`.** That directory is the source of truth for visuals; don't ship a Swift view that contradicts the JSX mockup.
 2. **Stay inside the PRD's scope.** If a proposal would push the product toward cloud / teams / workflows, it's a "no" regardless of how well-implemented it is. This isn't gatekeeping — it's the reason the tool is fast and trustworthy.
