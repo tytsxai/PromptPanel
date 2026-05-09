@@ -156,6 +156,7 @@ struct MainWindowView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(isActive ? Constants.VisualStyle.tintMedium : Color.clear)
                 )
+                .roundedHitTarget(cornerRadius: 6)
         }
         .buttonStyle(.plain)
     }

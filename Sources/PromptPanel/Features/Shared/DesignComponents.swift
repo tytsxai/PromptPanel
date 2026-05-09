@@ -8,6 +8,16 @@ enum Design {
     static let popoverShadowRadius: CGFloat = 36
 }
 
+extension View {
+    func fullHitTarget() -> some View {
+        contentShape(Rectangle())
+    }
+
+    func roundedHitTarget(cornerRadius: CGFloat) -> some View {
+        contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
 struct KbdLabel: View {
     let text: String
 
@@ -71,6 +81,7 @@ struct FilterChip: View {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(isActive ? Constants.VisualStyle.accentDim : Color.clear)
             )
+            .roundedHitTarget(cornerRadius: 4)
         }
         .buttonStyle(.plain)
     }
@@ -127,6 +138,7 @@ struct PrimaryActionButton: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Constants.VisualStyle.accent)
             )
+            .roundedHitTarget(cornerRadius: 6)
         }
         .buttonStyle(.plain)
     }
@@ -184,6 +196,7 @@ struct GhostActionButton: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(strokeColor, lineWidth: 0.5)
             )
+            .roundedHitTarget(cornerRadius: 6)
         }
         .buttonStyle(.plain)
     }
@@ -226,6 +239,7 @@ struct QuietIconButton: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(Color.clear)
                 )
+                .roundedHitTarget(cornerRadius: 5)
         }
         .buttonStyle(.plain)
         .help(help ?? "")

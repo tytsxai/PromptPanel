@@ -102,6 +102,8 @@ struct QuickPanelView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Constants.VisualStyle.textTertiary)
+                        .frame(width: Constants.Layout.compactControlHeight, height: Constants.Layout.compactControlHeight)
+                        .roundedHitTarget(cornerRadius: 5)
                 }
                 .buttonStyle(.plain)
                 .help("清除搜索")
@@ -174,6 +176,7 @@ struct QuickPanelView: View {
                 RoundedRectangle(cornerRadius: Design.pillCornerRadius, style: .continuous)
                     .strokeBorder(Constants.VisualStyle.border, lineWidth: 0.5)
             )
+            .roundedHitTarget(cornerRadius: Design.pillCornerRadius)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -192,6 +195,7 @@ struct QuickPanelView: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(appState.isPanelPinned ? Constants.VisualStyle.warnDim : Color.clear)
                 )
+                .roundedHitTarget(cornerRadius: 5)
         }
         .buttonStyle(.plain)
         .keyboardShortcut("p", modifiers: .command)
@@ -206,6 +210,7 @@ struct QuickPanelView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Constants.VisualStyle.textTertiary)
                 .frame(width: Constants.Layout.compactControlHeight, height: Constants.Layout.compactControlHeight)
+                .roundedHitTarget(cornerRadius: 5)
         }
         .buttonStyle(.plain)
         .help("打开设置")
@@ -313,6 +318,9 @@ struct QuickPanelView: View {
                 .buttonStyle(.plain)
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(statusAccent(for: tone))
+                .padding(.horizontal, 6)
+                .frame(height: 22)
+                .roundedHitTarget(cornerRadius: 5)
             }
         }
         .padding(.horizontal, 12)
@@ -494,6 +502,7 @@ private struct PanelRow: View {
                 .padding(.leading, 8)
                 .padding(.trailing, 12)
                 .frame(width: geometry.size.width, height: geometry.size.height)
+                .roundedHitTarget(cornerRadius: Design.rowCornerRadius)
             }
             .frame(height: isCompact ? Constants.Layout.compactRowHeight : Constants.Layout.regularRowHeight)
             .background(

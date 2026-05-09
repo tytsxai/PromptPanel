@@ -294,6 +294,7 @@ struct SettingsPillButton: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(borderColor, lineWidth: 0.5)
             )
+            .roundedHitTarget(cornerRadius: 6)
         }
         .buttonStyle(.plain)
     }
@@ -381,6 +382,7 @@ private struct ThemeSegmentedPicker: View {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
             )
+            .roundedHitTarget(cornerRadius: 5)
         }
         .buttonStyle(.plain)
     }
@@ -438,6 +440,7 @@ private struct EntrySortSegmentedPicker: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
                 )
+                .roundedHitTarget(cornerRadius: 5)
         }
         .buttonStyle(.plain)
     }
@@ -855,6 +858,7 @@ private struct DataLocationSection: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Constants.VisualStyle.textTertiary)
                         .frame(width: 24, height: 24)
+                        .roundedHitTarget(cornerRadius: 5)
                 }
                 .buttonStyle(.plain)
                 .help("复制路径")

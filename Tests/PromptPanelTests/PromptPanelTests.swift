@@ -1696,6 +1696,20 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertLessThan(stripCallRange.lowerBound, appSignRange.lowerBound)
     }
 
+    func testRestoreBackupStagesValidatedCopyBeforeMovingCurrentDatabase() throws {
+        let script = try readRepositoryText("scripts/restore-backup.sh")
+
+        let stageCopyRange = try XCTUnwrap(script.range(of: "cp \"$BACKUP_SOURCE\" \"$STAGED_DATABASE_PATH\""))
+        let preserveCurrentRange = try XCTUnwrap(script.range(of: "mv \"$SOURCE_PATH\" \"${RECOVERY_DIR}/\""))
+        let restoreStagedRange = try XCTUnwrap(script.range(of: "mv \"$STAGED_DATABASE_PATH\" \"$DATABASE_PATH\""))
+
+        XCTAssertTrue(script.contains("STAGING_DIR=\"${TARGET_APP_SUPPORT_DIR}/Recovery/manual-restore-staging-${TIMESTAMP}\""))
+        XCTAssertTrue(script.contains("STAGED_INTEGRITY_RESULT="))
+        XCTAssertFalse(script.contains("cp \"$BACKUP_SOURCE\" \"$DATABASE_PATH\""))
+        XCTAssertLessThan(stageCopyRange.lowerBound, preserveCurrentRange.lowerBound)
+        XCTAssertLessThan(preserveCurrentRange.lowerBound, restoreStagedRange.lowerBound)
+    }
+
     private func waitForRecentExecutionLog(
         _ logRepository: LogRepository,
         timeout: TimeInterval = 1
@@ -3062,6 +3076,43 @@ func buildAppStripsExtendedAttributesBeforeSigning() throws {
 
     #expect(script.contains("xattr -cr \"$target_path\""))
     #expect(stripCallRange.lowerBound < appSignRange.lowerBound)
+}
+
+@Test
+func restoreBackupStagesValidatedCopyBeforeMovingCurrentDatabase() throws {
+    let script = try readRepositoryText("scripts/restore-backup.sh")
+
+    let stageCopyRange = try #require(script.range(of: "cp \"$BACKUP_SOURCE\" \"$STAGED_DATABASE_PATH\""))
+    let preserveCurrentRange = try #require(script.range(of: "mv \"$SOURCE_PATH\" \"${RECOVERY_DIR}/\""))
+    let restoreStagedRange = try #require(script.range(of: "mv \"$STAGED_DATABASE_PATH\" \"$DATABASE_PATH\""))
+
+    #expect(script.contains("STAGING_DIR=\"${TARGET_APP_SUPPORT_DIR}/Recovery/manual-restore-staging-${TIMESTAMP}\""))
+    #expect(script.contains("STAGED_INTEGRITY_RESULT="))
+    #expect(!script.contains("cp \"$BACKUP_SOURCE\" \"$DATABASE_PATH\""))
+    #expect(stageCopyRange.lowerBound < preserveCurrentRange.lowerBound)
+    #expect(preserveCurrentRange.lowerBound < restoreStagedRange.lowerBound)
+}
+
+@Test
+func swiftUIPrimaryClickSurfacesUseExpandedHitTargets() throws {
+    let design = try readRepositoryText("Sources/PromptPanel/Features/Shared/DesignComponents.swift")
+    let library = try readRepositoryText("Sources/PromptPanel/Features/MainWindow/LibraryView.swift")
+    let mainWindow = try readRepositoryText("Sources/PromptPanel/Features/MainWindow/MainWindowView.swift")
+    let quickPanel = try readRepositoryText("Sources/PromptPanel/Features/Panel/QuickPanelView.swift")
+    let settings = try readRepositoryText("Sources/PromptPanel/Features/MainWindow/SettingsView.swift")
+
+    #expect(design.contains("func fullHitTarget()"))
+    #expect(design.contains("func roundedHitTarget(cornerRadius: CGFloat)"))
+
+    #expect(library.contains("@FocusState private var isEntrySearchFocused"))
+    #expect(library.contains(".focused($isEntrySearchFocused)"))
+    #expect(library.contains(".onTapGesture {\n            isEntrySearchFocused = true\n        }"))
+    #expect(library.components(separatedBy: ".fullHitTarget()").count >= 2)
+    #expect(library.components(separatedBy: ".roundedHitTarget(cornerRadius: 6)").count >= 3)
+
+    #expect(mainWindow.contains(".roundedHitTarget(cornerRadius: 6)"))
+    #expect(quickPanel.components(separatedBy: ".roundedHitTarget").count >= 6)
+    #expect(settings.components(separatedBy: ".roundedHitTarget(cornerRadius: 5)").count >= 3)
 }
 #endif
 

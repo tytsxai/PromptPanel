@@ -122,6 +122,25 @@ chmod 700 "$TARGET_APP_SUPPORT_DIR"
 
 TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
 RECOVERY_DIR="${TARGET_APP_SUPPORT_DIR}/Recovery/manual-restore-${TIMESTAMP}"
+STAGING_DIR="${TARGET_APP_SUPPORT_DIR}/Recovery/manual-restore-staging-${TIMESTAMP}"
+STAGED_DATABASE_PATH="${STAGING_DIR}/promptpanel.db"
+
+cleanup_staging() {
+    rm -rf "$STAGING_DIR"
+}
+trap cleanup_staging EXIT
+
+mkdir -p "$STAGING_DIR"
+chmod 700 "$STAGING_DIR"
+cp "$BACKUP_SOURCE" "$STAGED_DATABASE_PATH"
+chmod 600 "$STAGED_DATABASE_PATH"
+
+STAGED_INTEGRITY_RESULT="$(sqlite3 "$STAGED_DATABASE_PATH" 'PRAGMA integrity_check;' 2>/dev/null || true)"
+if [[ "$STAGED_INTEGRITY_RESULT" != "ok" ]]; then
+    echo "Staged backup integrity check failed: $STAGED_DATABASE_PATH" >&2
+    echo "$STAGED_INTEGRITY_RESULT" >&2
+    exit 1
+fi
 
 if [[ -e "$DATABASE_PATH" || -e "${DATABASE_PATH}-wal" || -e "${DATABASE_PATH}-shm" ]]; then
     mkdir -p "$RECOVERY_DIR"
@@ -135,7 +154,7 @@ if [[ -e "$DATABASE_PATH" || -e "${DATABASE_PATH}-wal" || -e "${DATABASE_PATH}-s
     echo "Existing database moved to: ${RECOVERY_DIR}"
 fi
 
-cp "$BACKUP_SOURCE" "$DATABASE_PATH"
+mv "$STAGED_DATABASE_PATH" "$DATABASE_PATH"
 chmod 600 "$DATABASE_PATH"
 rm -f "${DATABASE_PATH}-wal" "${DATABASE_PATH}-shm"
 

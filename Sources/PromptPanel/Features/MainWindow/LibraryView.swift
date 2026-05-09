@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LibraryView: View {
     @ObservedObject var viewModel: MainWindowViewModel
+    @FocusState private var isEntrySearchFocused: Bool
 
     var body: some View {
         HStack(spacing: 0) {
@@ -43,6 +44,7 @@ struct LibraryView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Constants.VisualStyle.textTertiary)
                         .frame(width: 22, height: 22)
+                        .roundedHitTarget(cornerRadius: 5)
                 }
                 .buttonStyle(.plain)
                 .help("新建项目")
@@ -124,6 +126,7 @@ struct LibraryView: View {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(Constants.VisualStyle.tintSubtle)
                     )
+                    .roundedHitTarget(cornerRadius: 6)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canMarkAsCurrent)
@@ -195,6 +198,7 @@ struct LibraryView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Constants.VisualStyle.text)
+                .focused($isEntrySearchFocused)
             if viewModel.entrySearchText.isEmpty {
                 KbdLabel(text: "⌘F")
             } else {
@@ -204,6 +208,8 @@ struct LibraryView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Constants.VisualStyle.textTertiary)
+                        .frame(width: 22, height: 22)
+                        .roundedHitTarget(cornerRadius: 5)
                 }
                 .buttonStyle(.plain)
             }
@@ -218,6 +224,10 @@ struct LibraryView: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .strokeBorder(Constants.VisualStyle.border, lineWidth: 0.5)
         )
+        .roundedHitTarget(cornerRadius: 7)
+        .onTapGesture {
+            isEntrySearchFocused = true
+        }
     }
 
     private var hasFilterChips: Bool {
@@ -426,10 +436,12 @@ private struct ProjectRow: View {
             }
             .padding(.horizontal, 8)
             .frame(height: Constants.Layout.regularRowHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isActive ? Constants.VisualStyle.tintSubtle : Color.clear)
             )
+            .roundedHitTarget(cornerRadius: 6)
         }
         .buttonStyle(.plain)
     }
@@ -503,7 +515,9 @@ private struct EntryListRow: View {
                     .fill(isSelected ? Constants.VisualStyle.accent : Color.clear)
                     .frame(width: 1.5)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? Constants.VisualStyle.tintSubtle : Color.clear)
+            .fullHitTarget()
         }
         .buttonStyle(.plain)
     }
