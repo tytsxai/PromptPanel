@@ -1,66 +1,154 @@
 {
   "@context": "https://schema.org",
-  "@type": [
-    "SoftwareApplication",
-    "SoftwareSourceCode"
-  ],
-  "name": "PromptPanel",
-  "alternateName": [
-    "PromptPanel macOS prompt launcher",
-    "项目快贴"
-  ],
-  "description": "PromptPanel is an open-source native macOS prompt manager and snippet launcher for AI power users. It stores prompts locally in SQLite, opens a keyboard-first global hotkey panel, and pastes reusable prompts, code snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.",
-  "url": "https://github.com/tytsxai/PromptPanel",
-  "codeRepository": "https://github.com/tytsxai/PromptPanel",
-  "downloadUrl": "https://github.com/tytsxai/PromptPanel",
-  "license": "https://spdx.org/licenses/MIT.html",
-  "applicationCategory": "DeveloperApplication",
-  "applicationSubCategory": "Prompt manager and snippet launcher",
-  "operatingSystem": "macOS 14 or later",
-  "runtimePlatform": "macOS",
-  "programmingLanguage": "Swift",
-  "softwareVersion": "1.0.0",
-  "isAccessibleForFree": true,
-  "keywords": [
-    "macOS prompt manager",
-    "AI prompt launcher",
-    "ChatGPT prompt manager",
-    "Claude prompt library",
-    "Cursor snippet manager",
-    "Copilot prompt launcher",
-    "open-source TextExpander alternative",
-    "Espanso alternative",
-    "Raycast snippets alternative",
-    "local-first prompt library",
-    "native Swift macOS app",
-    "global hotkey paste",
-    "keyboard-first prompt picker"
-  ],
-  "featureList": [
-    "Global hotkey quick panel",
-    "Local SQLite prompt library",
-    "Project-scoped prompts with a universal project",
-    "SQLite FTS5 title and content search",
-    "Tag filtering with #tag syntax",
-    "Clipboard-first execution guarantee",
-    "Best-effort automatic paste through macOS Accessibility",
-    "Execution logs without prompt body storage",
-    "Sparkle update integration",
-    "Developer ID signing and notarization scripts"
-  ],
-  "softwareRequirements": [
-    "macOS 14 Sonoma or later",
-    "Xcode 15 or later for source builds",
-    "Swift 5.10"
-  ],
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "author": {
-    "@type": "Person",
-    "name": "tytsxai",
-    "url": "https://github.com/tytsxai"
-  }
+  "@graph": [
+    {
+      "@type": [
+        "SoftwareApplication",
+        "SoftwareSourceCode"
+      ],
+      "@id": "https://github.com/tytsxai/PromptPanel#software",
+      "name": "PromptPanel",
+      "alternateName": [
+        "PromptPanel macOS prompt launcher",
+        "项目快贴"
+      ],
+      "description": "PromptPanel is an open-source native macOS prompt manager and snippet launcher for AI power users. It stores prompts locally in SQLite, opens a keyboard-first global hotkey panel, and pastes reusable prompts, code snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.",
+      "url": "https://github.com/tytsxai/PromptPanel",
+      "codeRepository": "https://github.com/tytsxai/PromptPanel",
+      "downloadUrl": "https://github.com/tytsxai/PromptPanel/releases",
+      "releaseNotes": "https://github.com/tytsxai/PromptPanel/blob/main/CHANGELOG.md",
+      "license": "https://spdx.org/licenses/MIT.html",
+      "applicationCategory": "DeveloperApplication",
+      "applicationSubCategory": "Prompt manager and snippet launcher",
+      "applicationSuite": "AI productivity tools",
+      "operatingSystem": "macOS 14 or later",
+      "runtimePlatform": "macOS",
+      "programmingLanguage": "Swift",
+      "softwareVersion": "1.0.0",
+      "datePublished": "2026-05-17",
+      "screenshot": [
+        "https://raw.githubusercontent.com/tytsxai/PromptPanel/main/frontend-draft/uploads/PromptPanel-panel-default.png",
+        "https://raw.githubusercontent.com/tytsxai/PromptPanel/main/frontend-draft/uploads/PromptPanel-library.png",
+        "https://raw.githubusercontent.com/tytsxai/PromptPanel/main/frontend-draft/uploads/PromptPanel-panel-min.png",
+        "https://raw.githubusercontent.com/tytsxai/PromptPanel/main/frontend-draft/uploads/PromptPanel-settings.png"
+      ],
+      "isAccessibleForFree": true,
+      "keywords": [
+        "macOS prompt manager",
+        "AI prompt launcher",
+        "ChatGPT prompt manager",
+        "Claude prompt library",
+        "Cursor snippet manager",
+        "Copilot prompt template launcher",
+        "open-source TextExpander alternative",
+        "Espanso alternative",
+        "Raycast snippets alternative",
+        "Alfred Snippets alternative",
+        "local-first prompt library",
+        "offline AI prompt storage",
+        "native Swift macOS app",
+        "global hotkey paste",
+        "keyboard-first prompt picker",
+        "prompt engineering toolkit macOS",
+        "NDA-safe prompt storage"
+      ],
+      "featureList": [
+        "Global hotkey quick panel",
+        "Local SQLite prompt library",
+        "Project-scoped prompts with a universal project",
+        "SQLite FTS5 title and content search",
+        "Tag filtering with #tag syntax",
+        "Clipboard-first execution guarantee",
+        "Best-effort automatic paste through macOS Accessibility",
+        "Execution logs without prompt body storage",
+        "Sparkle update integration",
+        "Developer ID signing and notarization scripts"
+      ],
+      "softwareRequirements": [
+        "macOS 14 Sonoma or later",
+        "Xcode 15 or later for source builds",
+        "Swift 5.10"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "tytsxai",
+        "url": "https://github.com/tytsxai"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://github.com/tytsxai/PromptPanel#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is PromptPanel?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PromptPanel is an open-source, local-first macOS prompt manager and snippet launcher for AI power users. A global hotkey opens a native NSPanel that searches a local SQLite prompt library and pastes the selected entry into any focused text field, such as ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, or browsers."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is PromptPanel free and open source?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. PromptPanel is MIT licensed and free. There is no paid tier, no account, no usage cap, and no required cloud service."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does PromptPanel send my prompts to the cloud?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Prompt content stays locally in SQLite at ~/Library/Application Support/PromptPanel/promptpanel.db. The only outbound traffic is the optional Sparkle update check, which fetches release metadata only."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which apps can PromptPanel paste into?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Any text field on macOS. Common targets include ChatGPT, Claude, Gemini and Perplexity in the browser; Cursor, VS Code, Xcode and JetBrains IDEs; Terminal and iTerm2; and chat tools like Slack and Notion."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is PromptPanel different from TextExpander, Espanso, Raycast Snippets, and Alfred Snippets?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PromptPanel is a narrower, AI-focused, local-first searchable panel. It does only one thing — search and paste reusable prompts and snippets through a global hotkey — and never requires an account, a paid tier, or a cloud service."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does PromptPanel ask for Accessibility permission?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It synthesizes Command-V after the panel hides and the previous app regains focus. Without that permission PromptPanel still copies the entry to the clipboard reliably and shows a toast asking the user to paste manually."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Will PromptPanel ever add cloud sync, teams, or workflow orchestration?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Cloud sync, team collaboration, and workflow orchestration are permanent non-goals in the product PRD. PromptPanel is intentionally single-user, local-only, and fast."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What macOS versions does PromptPanel support?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "macOS 14 Sonoma or later, on both Apple Silicon (M1/M2/M3/M4) and Intel Macs. The release is built as a universal binary."
+          }
+        }
+      ]
+    }
+  ]
 }

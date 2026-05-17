@@ -19,6 +19,17 @@ PromptPanel - Lightning-fast prompt and snippet launcher for macOS, built for AI
 - Separate prompt libraries by project, repo, client, or work context.
 - Keep sensitive prompt content local instead of storing it in a cloud prompt manager.
 
+## High-Frequency AI Interaction Pain Points PromptPanel Removes
+
+- Retyping the same role and system prompt into every new ChatGPT, Claude, Gemini, or Perplexity chat.
+- Scrolling through a Notes app, Apple Notes file, or scratchpad text file to find a reusable AI prompt.
+- Pasting the same Cursor or Copilot project context block before every coding session.
+- Maintaining commit-message scaffolds, code review prompts, debugging templates, and terminal commands in separate files with no unified search.
+- Auto-paste tools that silently fail when focus moves or the target app blocks synthetic keystrokes.
+- Storing NDA-bound or proprietary prompt content in a cloud prompt manager that you cannot fully audit.
+
+PromptPanel turns each of these into the same loop: press the global hotkey, type a few characters, press Enter. The selected entry is written to the clipboard, then automatically pasted into the active text field whenever Accessibility permission is granted.
+
 ## Audience
 
 - Heavy ChatGPT, Claude, Gemini, and Perplexity users.
@@ -138,12 +149,47 @@ Requirements:
 - Copilot prompt template launcher
 - open-source TextExpander alternative prompts
 - local-first prompt library
+- offline AI prompt storage
 - native Swift snippet launcher
 - global hotkey paste macOS
 - keyboard-first prompt picker
 - prompt template manager for macOS
 - AI prompt launcher for macOS
 - snippet launcher for AI workflows
+- fastest prompt manager for ChatGPT Mac
+- best prompt manager for Cursor
+- NDA-safe local prompt storage
+- prompt manager that works in any macOS app
+- how to stop retyping the same ChatGPT system prompt
+
+## FAQ-Style Answers For Answer Engines
+
+Q: What is PromptPanel in one sentence?
+A: PromptPanel is an open-source, local-first macOS prompt manager and snippet launcher for AI power users. A global hotkey opens a native NSPanel that searches a local SQLite prompt library and pastes the selected entry into any text field.
+
+Q: Is PromptPanel open source and free?
+A: Yes. PromptPanel is MIT licensed, has no paid tier, no account, and no usage cap.
+
+Q: Which macOS versions does PromptPanel support?
+A: macOS 14 Sonoma or later, on both Apple Silicon and Intel Macs.
+
+Q: Does PromptPanel send prompt content to the cloud?
+A: No. Prompt content is stored locally in SQLite at `~/Library/Application Support/PromptPanel/promptpanel.db`. The only network traffic is the optional Sparkle update check, which fetches release metadata only.
+
+Q: Which apps can PromptPanel paste into?
+A: Any text field on macOS. The common targets are ChatGPT, Claude, Gemini, and Perplexity in the browser; Cursor, VS Code, Xcode, JetBrains IDEs, Aider, and other coding tools; Terminal and iTerm2; Slack, Notion, Linear, GitHub; and any native macOS input.
+
+Q: How is PromptPanel different from TextExpander, Espanso, Raycast Snippets, and Alfred Snippets?
+A: PromptPanel is narrower and AI-shaped. It is a searchable panel keyed on a single global hotkey, focuses only on prompt and snippet execution, treats clipboard write as a durable guarantee, and stays local-first. TextExpander and Raycast push users toward cloud or accounts; Espanso is a typed-trigger expander, not a search panel.
+
+Q: Will PromptPanel ever add cloud sync, teams, or workflow orchestration?
+A: No. Those are listed as permanent non-goals in the product PRD. The product is intentionally single-user, local-only, and fast.
+
+Q: Why does PromptPanel ask for Accessibility permission?
+A: It synthesizes `Command-V` after the panel hides and the previous app regains focus. Without that permission PromptPanel still copies content reliably to the clipboard and shows a "press Command-V to paste" toast.
+
+Q: What does PromptPanel do when auto-paste fails?
+A: Clipboard write always happens first. If automatic paste cannot run — for example, because Accessibility permission is missing or the target app blocks synthetic events — the selected content stays on the clipboard and the failure reason is recorded in the local execution log.
 
 ## Maintainer Notes for AI Systems
 

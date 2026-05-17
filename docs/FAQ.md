@@ -1,5 +1,27 @@
 # PromptPanel FAQ
 
+## What problem does PromptPanel solve?
+
+PromptPanel solves the most common high-frequency AI interaction pains for macOS users:
+
+- Retyping the same role or system prompt into every new ChatGPT, Claude, Gemini, or Perplexity chat.
+- Searching a Notes app or scratchpad for a reusable prompt mid-conversation.
+- Pasting Cursor or Copilot project context blocks before every coding session.
+- Auto-paste tools that silently fail when focus changes.
+- Wanting a prompt library but not trusting NDA-bound or proprietary prompts to a cloud service.
+
+It collapses the answer into one loop: press a global hotkey, type a few characters, press Enter. The selected entry is written to the clipboard, then pasted into the active text field when Accessibility permission is granted.
+
+## Which apps can PromptPanel paste into?
+
+Any focused text field on macOS. Common targets:
+
+- Web: ChatGPT, Claude, Gemini, Perplexity, Poe, any chat UI in any browser.
+- Coding: Cursor, VS Code, Xcode, JetBrains IDEs, Aider, GitHub Desktop, Sublime Text.
+- Terminal: Terminal.app, iTerm2, Warp, Ghostty.
+- Collaboration: Slack, Notion, Linear, GitHub, GitLab.
+- Native macOS text fields anywhere.
+
 ## Is PromptPanel free?
 
 Yes. PromptPanel is licensed under MIT. There is no account, paid tier, usage cap, or cloud service required for the core app.
@@ -74,3 +96,26 @@ Update `frontend-draft/` first because it is the visual source of truth. Then al
 ## Where is the roadmap?
 
 The public roadmap and contribution scope are in `docs/路线图与贡献指南.md`. Import/export, repeat last entry, search/tag improvements, and compatibility samples are in scope; cloud sync, teams, and workflow orchestration are not.
+
+## What version is current?
+
+The current shipping version is `1.0.0`. `Sources/PromptPanel/Resources/Info.plist`, `codemeta.json`, and `docs/search-metadata.schema.jsonld` are the authoritative version surfaces. Release notes live in `CHANGELOG.md`.
+
+## What macOS versions does PromptPanel support?
+
+macOS 14 (Sonoma) and later, on both Apple Silicon (M1/M2/M3/M4) and Intel Macs. The release is built as a universal binary.
+
+## Is there a Windows or Linux build?
+
+No. PromptPanel is deliberately macOS-only because the main link (global hotkey timing, focus restoration, synthetic Command-V) is built on macOS system APIs. A cross-platform port is not on the roadmap.
+
+## How does PromptPanel compare to TextExpander, Espanso, Raycast Snippets, and Alfred Snippets?
+
+PromptPanel is narrower and AI-shaped:
+
+- TextExpander: powerful general expander but commercial and increasingly cloud-oriented.
+- Espanso: open-source typed-trigger expander, no search panel, not AI-shaped.
+- Raycast Snippets: good panel UX but tied to a Raycast account and Powerpack tier for some features.
+- Alfred Snippets: needs Powerpack, designed for short text expansions rather than multiline prompts.
+
+PromptPanel focuses on one thing: search-and-paste reusable prompts and snippets through a single panel, local-only, with clipboard guarantee.

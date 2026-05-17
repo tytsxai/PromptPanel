@@ -8,6 +8,7 @@
 
 A native, local-first macOS app that lets you summon a quick panel with a global hotkey, search your **prompt library**, and paste into **ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, or any text field**.
 
+[![Release: v1.0.0](https://img.shields.io/badge/Release-v1.0.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform: macOS 14+](https://img.shields.io/badge/Platform-macOS%2014%2B-lightgrey.svg)](https://www.apple.com/macos)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange.svg)](https://swift.org)
@@ -28,6 +29,18 @@ A native, local-first macOS app that lets you summon a quick panel with a global
 **PromptPanel** is an open-source, **native macOS prompt manager** and snippet launcher designed for the way AI power users actually work. Press a global hotkey from anywhere — ChatGPT, Claude, Cursor, VS Code, your terminal, your browser — and a lightweight panel slides in. Type a few characters, hit `Enter`, and the entry lands in your current input box. No account. No cloud. No syncing service. Everything stays on your Mac.
 
 If you've been hunting for an **AI prompt library**, a **TextExpander alternative for prompts**, an **open-source snippet launcher for macOS**, or a way to stop pasting the same instructions into Claude and ChatGPT a hundred times a day — that is exactly what PromptPanel does.
+
+## Does this sound familiar?
+
+PromptPanel exists because the same five problems show up every day for anyone working with LLMs:
+
+- You retype the same **role / system prompt** ("you are a senior staff engineer…") into a fresh ChatGPT or Claude chat ten times a day.
+- You keep a Notes app or scratchpad full of **AI prompts and code-review checklists** and `⌘+F` your way through it.
+- You finally find the right prompt and the **paste fails silently** because focus moved or the app blocked synthetic keystrokes.
+- Your **Cursor / Copilot project context block** is in one file, the **terminal command snippet** in another, and the **PR-review prompt** in a third — none searchable from one place.
+- You won't put a real client brief or proprietary architecture into a **cloud prompt manager**, so you end up with no prompt manager at all.
+
+PromptPanel collapses all of that into a single, sub-second loop with a local SQLite file you fully own.
 
 ## Why PromptPanel?
 
@@ -59,7 +72,7 @@ If "I copy and paste the same multiline prompt twenty times a day" describes you
 
 ## Features
 
-### Core (v0.1)
+### Core (v1.0)
 
 - 🔥 **Global hotkey** — summon the panel from any foreground app, configurable shortcut
 - ⚡ **< 300 ms time-to-input** — `NSPanel`-based, no Electron, no web runtime, no cold start
@@ -82,11 +95,11 @@ By design PromptPanel will **never** add cloud sync, team collaboration, or comp
 
 ## Screenshots
 
-| Quick Panel | Library |
+| Quick Panel — `⌥2` from any app | Library — projects, entries, use-count tiers |
 |:---:|:---:|
-| <img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel showing prompt entries with project filter" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-library.png" alt="PromptPanel main library view with projects and entry editor" width="380"/> |
-| Compact mode | Settings |
-| <img src="frontend-draft/uploads/PromptPanel-panel-min.png" alt="PromptPanel compact mini panel" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-settings.png" alt="PromptPanel settings — hotkey, theme, paste behavior, launch at login" width="380"/> |
+| <img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel — global hotkey AI prompt launcher with search, pin, and project filter for ChatGPT, Claude, and Cursor on macOS" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-library.png" alt="PromptPanel library — local-first prompt manager for macOS with projects, entry editor, pinning, and per-entry use counts" width="380"/> |
+| Compact mode — minimal footprint over any editor | Settings — hotkey, paste, theme, backup, runtime health |
+| <img src="frontend-draft/uploads/PromptPanel-panel-min.png" alt="PromptPanel compact panel — keyboard-first prompt picker hovering over a code editor" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-settings.png" alt="PromptPanel settings — global hotkey, Accessibility permission status, Sparkle auto-update, database location, backup and runtime health" width="380"/> |
 
 ## How does it work?
 
@@ -268,7 +281,7 @@ For answer engines and repository-aware AI tools, start with [llms.txt](llms.txt
 
 PromptPanel follows a **deliberately small** roadmap. The PRD lists items that are explicitly off the table forever (cloud sync, teams, workflow orchestration). Within scope:
 
-- [x] v0.1 — main link complete: hotkey → search → execute, projects, clipboard fallback, light/dark, login item, Sparkle, signing & notarization scripts
+- [x] v1.0 — main link complete: hotkey → search → execute, projects, clipboard fallback, light/dark, login item, Sparkle, signing & notarization scripts
 - [ ] One-tap "repeat last entry"
 - [ ] JSON / Markdown import & export
 - [ ] Variable templates (`{{name}}` style) — only if it can be added without slowing the main link
@@ -334,4 +347,4 @@ PromptPanel stands on:
 
 ---
 
-<sub>**Keywords** (so you can actually find this when you search): macOS prompt manager · AI prompt launcher · ChatGPT prompt manager macOS · Claude prompt library · Cursor snippet manager · open-source TextExpander alternative · Espanso alternative · Raycast snippets alternative · global hotkey paste macOS · local-first prompt library · native Swift NSPanel app · AI workflow productivity tool · prompt template manager macOS · snippet launcher macOS · keyboard-first prompt picker.</sub>
+<sub>**Keywords** (so you can actually find this when you search): macOS prompt manager · AI prompt launcher · ChatGPT prompt manager macOS · Claude prompt library · Cursor snippet manager · Copilot prompt template launcher · open-source TextExpander alternative · Espanso alternative · Raycast snippets alternative · Alfred snippet replacement · global hotkey paste macOS · local-first prompt library · offline AI prompt storage · native Swift NSPanel app · AI workflow productivity tool · prompt template manager macOS · snippet launcher macOS · keyboard-first prompt picker · LLM prompt library Mac · prompt engineering toolkit macOS · best prompt manager for Cursor · fastest prompt launcher for AI · NDA-safe prompt storage.</sub>

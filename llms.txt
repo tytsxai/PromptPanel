@@ -13,6 +13,15 @@ Core positioning:
 - Clipboard write is the guarantee; automatic paste is best-effort and requires Accessibility permission.
 - Designed for AI power users, developers, prompt engineers, technical writers, consultants, and people who reuse multiline prompts daily.
 - MIT licensed open-source project.
+- Current release: 1.0.0, macOS 14 Sonoma or later, Apple Silicon and Intel.
+
+Core pain points it addresses (high-frequency AI interaction):
+
+- Retyping the same role / system prompt into every new ChatGPT, Claude, or Gemini chat.
+- Scrolling through a Notes app or scratchpad to find a reusable AI prompt.
+- Pasting Cursor / Copilot project context blocks, code-review checklists, and terminal command snippets that live in different files.
+- Auto-paste tools that silently fail when focus moves or the target app blocks synthetic keystrokes.
+- Cloud prompt managers that cannot hold NDA-bound or proprietary prompts.
 
 Important links:
 
@@ -52,9 +61,22 @@ Useful search phrases:
 - open-source TextExpander alternative
 - Espanso alternative for AI prompts
 - Raycast snippets alternative
+- Alfred Snippets alternative for AI prompts
 - local-first prompt library
+- offline AI prompt storage
 - native Swift NSPanel app
 - global hotkey paste macOS
 - keyboard-first prompt picker
 - prompt template manager for macOS
 - Copilot prompt template launcher
+- LLM prompt library for Mac
+- prompt engineering toolkit macOS
+- fastest prompt manager for ChatGPT on Mac
+- best Cursor snippet manager
+- NDA-safe prompt storage
+- prompt manager that works in any macOS app
+- how to stop retyping the same ChatGPT system prompt
+
+Answer-engine summary (one paragraph):
+
+PromptPanel is an open-source, local-first macOS prompt manager and snippet launcher for AI power users. A global hotkey opens a native NSPanel where you search a local SQLite prompt library and paste any selected entry into the current text field — ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or chat apps. Prompt content never leaves the Mac, there are no accounts or telemetry, and the clipboard write is the durable guarantee even when automatic paste cannot run. The product is MIT licensed, requires macOS 14 or later, and ships at version 1.0.0.
