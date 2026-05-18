@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: MainWindowViewModel
+    @State private var selectedArea: SettingsArea = .preferences
 
     private let columnSpacing: CGFloat = 14
 
@@ -15,24 +16,9 @@ struct SettingsView: View {
 
                 SettingsHealthStrip(viewModel: viewModel)
 
-                HStack(alignment: .top, spacing: columnSpacing) {
-                    SettingsColumn {
-                        AppearanceSection(viewModel: viewModel)
-                        LibrarySection(viewModel: viewModel)
-                        HotkeySection(viewModel: viewModel)
-                        PanelBehaviorSection(viewModel: viewModel)
-                        PermissionSection(viewModel: viewModel)
-                    }
+                SettingsAreaPicker(selection: $selectedArea)
 
-                    SettingsColumn {
-                        OperationOverviewSection(viewModel: viewModel)
-                        MaintenanceSection(viewModel: viewModel)
-                    }
-                }
-
-                DataLocationSection(viewModel: viewModel)
-
-                RecentExecutionsSection(viewModel: viewModel)
+                selectedAreaContent
             }
             .padding(.horizontal, 20)
             .padding(.top, 14)
@@ -41,6 +27,117 @@ struct SettingsView: View {
         }
         .scrollIndicators(.hidden)
         .background(Constants.VisualStyle.surface)
+    }
+
+    @ViewBuilder
+    private var selectedAreaContent: some View {
+        switch selectedArea {
+        case .preferences:
+            HStack(alignment: .top, spacing: columnSpacing) {
+                SettingsColumn {
+                    AppearanceSection(viewModel: viewModel)
+                    LibrarySection(viewModel: viewModel)
+                }
+
+                SettingsColumn {
+                    HotkeySection(viewModel: viewModel)
+                    PanelBehaviorSection(viewModel: viewModel)
+                }
+            }
+        case .permissions:
+            HStack(alignment: .top, spacing: columnSpacing) {
+                SettingsColumn {
+                    PermissionSection(viewModel: viewModel)
+                }
+
+                SettingsColumn {
+                    OperationOverviewSection(viewModel: viewModel)
+                }
+            }
+        case .maintenance:
+            VStack(alignment: .leading, spacing: Constants.Layout.sectionSpacing) {
+                HStack(alignment: .top, spacing: columnSpacing) {
+                    SettingsColumn {
+                        OperationOverviewSection(viewModel: viewModel)
+                    }
+
+                    SettingsColumn {
+                        MaintenanceSection(viewModel: viewModel)
+                    }
+                }
+
+                DataLocationSection(viewModel: viewModel)
+                RecentExecutionsSection(viewModel: viewModel)
+            }
+        }
+    }
+}
+
+private enum SettingsArea: String, CaseIterable, Identifiable {
+    case preferences
+    case permissions
+    case maintenance
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .preferences: return "偏好"
+        case .permissions: return "权限"
+        case .maintenance: return "维护"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .preferences: return "slider.horizontal.3"
+        case .permissions: return "hand.raised"
+        case .maintenance: return "externaldrive"
+        }
+    }
+}
+
+private struct SettingsAreaPicker: View {
+    @Binding var selection: SettingsArea
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(SettingsArea.allCases) { area in
+                option(for: area)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Constants.VisualStyle.tintSubtle)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Constants.VisualStyle.border, lineWidth: 0.5)
+        )
+    }
+
+    private func option(for area: SettingsArea) -> some View {
+        let isActive = selection == area
+        return Button {
+            selection = area
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: area.systemImage)
+                    .font(.system(size: 11, weight: .medium))
+                Text(area.title)
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .foregroundStyle(isActive ? Constants.VisualStyle.text : Constants.VisualStyle.textTertiary)
+            .padding(.horizontal, 12)
+            .frame(height: 26)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isActive ? Constants.VisualStyle.tintStrong : Color.clear)
+            )
+            .roundedHitTarget(cornerRadius: 6)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -256,6 +353,7 @@ struct SettingsPillButton: View {
     let title: String
     let systemImage: String?
     let tone: Tone
+    let fillsAvailableWidth: Bool
     let action: () -> Void
 
     enum Tone {
@@ -264,10 +362,17 @@ struct SettingsPillButton: View {
         case danger
     }
 
-    init(_ title: String, systemImage: String? = nil, tone: Tone = .neutral, action: @escaping () -> Void) {
+    init(
+        _ title: String,
+        systemImage: String? = nil,
+        tone: Tone = .neutral,
+        fillsAvailableWidth: Bool = false,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.systemImage = systemImage
         self.tone = tone
+        self.fillsAvailableWidth = fillsAvailableWidth
         self.action = action
     }
 
@@ -281,10 +386,10 @@ struct SettingsPillButton: View {
                 Text(title)
                     .font(.system(size: 11.5, weight: .medium))
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, 10)
+            .frame(maxWidth: fillsAvailableWidth ? .infinity : nil)
             .frame(height: Constants.Layout.compactControlHeight)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -772,23 +877,23 @@ private struct MaintenanceSection: View {
                 alignment: .leading,
                 spacing: 6
             ) {
-                SettingsPillButton("刷新状态", systemImage: "arrow.clockwise") {
+                SettingsPillButton("刷新状态", systemImage: "arrow.clockwise", fillsAvailableWidth: true) {
                     viewModel.refreshOperationalStatus()
                     viewModel.refreshUpdaterStatus()
                 }
-                SettingsPillButton("检查更新", systemImage: "arrow.down.circle") {
+                SettingsPillButton("检查更新", systemImage: "arrow.down.circle", fillsAvailableWidth: true) {
                     viewModel.checkForUpdates()
                 }
-                SettingsPillButton("立即备份", systemImage: "plus", tone: .primary) {
+                SettingsPillButton("立即备份", systemImage: "plus", tone: .primary, fillsAvailableWidth: true) {
                     viewModel.createBackupNow()
                 }
-                SettingsPillButton("数据目录", systemImage: "folder") {
+                SettingsPillButton("数据目录", systemImage: "folder", fillsAvailableWidth: true) {
                     viewModel.openDataDirectory()
                 }
-                SettingsPillButton("备份目录", systemImage: "tray.full") {
+                SettingsPillButton("备份目录", systemImage: "tray.full", fillsAvailableWidth: true) {
                     viewModel.openBackupDirectory()
                 }
-                SettingsPillButton("清理日志", systemImage: "trash", tone: .danger) {
+                SettingsPillButton("清理日志", systemImage: "trash", tone: .danger, fillsAvailableWidth: true) {
                     viewModel.cleanupLogs()
                 }
             }

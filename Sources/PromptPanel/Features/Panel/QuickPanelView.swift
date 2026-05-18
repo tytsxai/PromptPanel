@@ -213,7 +213,7 @@ struct QuickPanelView: View {
                 .roundedHitTarget(cornerRadius: 5)
         }
         .buttonStyle(.plain)
-        .help("打开设置")
+        .help("打开词库与设置")
     }
 
     // MARK: - Results
@@ -441,7 +441,7 @@ private struct PanelRow: View {
                     Text(numberText)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(isSelected ? Constants.VisualStyle.accent : Constants.VisualStyle.textQuaternary)
-                        .frame(width: 16, alignment: .center)
+                        .frame(width: 24, alignment: .center)
 
                     Image(systemName: type.symbolName)
                         .font(.system(size: 12, weight: .medium))
@@ -520,7 +520,7 @@ private struct PanelRow: View {
     }
 
     private var numberText: String {
-        showNumber && index < 9 ? "\(index + 1)" : ""
+        showNumber ? "\(index + 1)" : ""
     }
 
     private var previewText: String {

@@ -4,9 +4,9 @@
 
 # PromptPanel
 
-### Lightning-fast prompt & snippet launcher for macOS, built for AI power users.
+### Native macOS prompt manager and snippet launcher for ChatGPT, Claude, Cursor, Copilot, VS Code, and Terminal.
 
-A native, local-first macOS app that lets you summon a quick panel with a global hotkey, search your **prompt library**, and paste into **ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, or any text field**.
+PromptPanel is a local-first **macOS prompt manager**, **AI prompt launcher**, and **snippet launcher**. Press a global hotkey, search your local **prompt library**, and paste reusable prompts, code snippets, templates, and instructions into **ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any text field**.
 
 [![Release: v1.0.0](https://img.shields.io/badge/Release-v1.0.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -18,7 +18,7 @@ A native, local-first macOS app that lets you summon a quick panel with a global
 
 [**English**](README.md) · [**简体中文**](README.zh-CN.md) · [**FAQ**](docs/FAQ.md) · [**Docs**](docs/README.md) · [**LLM index**](llms.txt) · [**Changelog**](CHANGELOG.md) · [**Contributing**](.github/CONTRIBUTING.md)
 
-<img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel summoned over a text editor — search and paste prompts in milliseconds" width="780" />
+<img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel macOS prompt manager quick panel — global hotkey search for ChatGPT prompts, Claude prompts, Cursor snippets, and reusable AI templates" width="780" />
 
 </div>
 
@@ -29,6 +29,8 @@ A native, local-first macOS app that lets you summon a quick panel with a global
 **PromptPanel** is an open-source, **native macOS prompt manager** and snippet launcher designed for the way AI power users actually work. Press a global hotkey from anywhere — ChatGPT, Claude, Cursor, VS Code, your terminal, your browser — and a lightweight panel slides in. Type a few characters, hit `Enter`, and the entry lands in your current input box. No account. No cloud. No syncing service. Everything stays on your Mac.
 
 If you've been hunting for an **AI prompt library**, a **TextExpander alternative for prompts**, an **open-source snippet launcher for macOS**, or a way to stop pasting the same instructions into Claude and ChatGPT a hundred times a day — that is exactly what PromptPanel does.
+
+Common ways people look for this project: **ChatGPT prompt manager for macOS**, **Claude prompt library**, **Cursor snippet manager**, **local-first prompt library**, **global hotkey paste tool**, **Raycast snippets alternative for AI prompts**, and **open-source TextExpander alternative for multiline prompts**.
 
 ## Does this sound familiar?
 
@@ -97,9 +99,9 @@ By design PromptPanel will **never** add cloud sync, team collaboration, or comp
 
 | Quick Panel — `⌥2` from any app | Library — projects, entries, use-count tiers |
 |:---:|:---:|
-| <img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel — global hotkey AI prompt launcher with search, pin, and project filter for ChatGPT, Claude, and Cursor on macOS" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-library.png" alt="PromptPanel library — local-first prompt manager for macOS with projects, entry editor, pinning, and per-entry use counts" width="380"/> |
-| Compact mode — minimal footprint over any editor | Settings — hotkey, paste, theme, backup, runtime health |
-| <img src="frontend-draft/uploads/PromptPanel-panel-min.png" alt="PromptPanel compact panel — keyboard-first prompt picker hovering over a code editor" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-settings.png" alt="PromptPanel settings — global hotkey, Accessibility permission status, Sparkle auto-update, database location, backup and runtime health" width="380"/> |
+| <img src="frontend-draft/uploads/PromptPanel-panel-default.png" alt="PromptPanel quick panel — global hotkey AI prompt launcher with continuous row numbers, search, pinning, project scope, use-count tiers, and clipboard paste for ChatGPT, Claude, and Cursor on macOS" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-library.png" alt="PromptPanel library — local-first macOS prompt manager with projects, prompt entries, reusable snippets, editor preview, tags, pinning, and per-entry use counts" width="380"/> |
+| Smaller panel — compact footprint over any editor | Settings — preferences, permissions, maintenance |
+| <img src="frontend-draft/uploads/PromptPanel-panel-min.png" alt="PromptPanel smaller quick panel — keyboard-first prompt picker and snippet launcher hovering over another macOS app" width="380"/> | <img src="frontend-draft/uploads/PromptPanel-settings.png" alt="PromptPanel settings — segmented preferences, Accessibility permission, hotkey recorder, panel behavior, backup, logs, database location, and runtime health" width="380"/> |
 
 ## How does it work?
 
@@ -276,6 +278,16 @@ The public documentation set is part of the repository:
 - [CodeMeta software metadata](codemeta.json)
 
 For answer engines and repository-aware AI tools, start with [llms.txt](llms.txt) or the expanded [llms-full.txt](docs/ai-search/llms-full.txt).
+
+## Search & AI Discoverability
+
+PromptPanel keeps classic SEO and GEO surfaces in-repo so users and answer engines can identify the project accurately:
+
+- `README.md` and `README.zh-CN.md` give the human landing-page summary and current screenshots.
+- [llms.txt](llms.txt) is the short AI-readable index for repository-aware tools.
+- [docs/ai-search/llms-full.txt](docs/ai-search/llms-full.txt) is the expanded answer-engine context with FAQ-style answers.
+- [codemeta.json](codemeta.json) and [Schema.org JSON-LD](docs/search-metadata.schema.jsonld) describe the app for software catalogs, search crawlers, and future docs-site publishing.
+- [AI search and discoverability](docs/ai-search-discoverability.md) defines the canonical wording, search-intent map, and maintenance checklist.
 
 ## Roadmap
 

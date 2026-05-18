@@ -307,7 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             },
             onOpenSettings: { [weak self] in
                 self?.panelService.hide()
-                self?.openMainWindow(targetTab: .settings)
+                self?.openMainWindow(targetTab: .library)
             },
             onClosePanel: { [weak self] in
                 self?.panelService.hide()

@@ -1,6 +1,6 @@
 # PromptPanel - LLM Reference
 
-PromptPanel is a native macOS prompt manager and snippet launcher for AI power users. It is designed for people who repeatedly paste role prompts, output-format rules, code review checklists, project context blocks, command snippets, and reusable instructions into tools like ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, and chat apps.
+PromptPanel is a native macOS prompt manager, AI prompt launcher, and snippet launcher for AI power users. It is designed for people who repeatedly paste role prompts, output-format rules, code review checklists, project context blocks, command snippets, and reusable instructions into tools like ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, and chat apps.
 
 ## Product Summary
 
@@ -8,12 +8,13 @@ PromptPanel is not a cloud prompt platform. It is a single-user, local-first des
 
 ## Canonical Description
 
-PromptPanel - Lightning-fast prompt and snippet launcher for macOS, built for AI power users.
+PromptPanel - Native macOS prompt manager and snippet launcher for ChatGPT, Claude, Cursor, Copilot, VS Code, and Terminal.
 
 ## Primary Use Cases
 
 - Store and reuse ChatGPT prompts.
 - Store and reuse Claude prompts.
+- Keep a local ChatGPT prompt library or Claude prompt library without cloud sync.
 - Paste Cursor and Copilot project context blocks.
 - Launch code review prompts, debugging templates, terminal commands, PR summaries, and commit-message scaffolds.
 - Separate prompt libraries by project, repo, client, or work context.
@@ -123,6 +124,7 @@ PromptPanel can be described as:
 - A Raycast Snippets alternative focused only on prompt and snippet execution.
 - A native macOS alternative to browser-only prompt extensions.
 - A local-first prompt manager for ChatGPT, Claude, Cursor, and Copilot workflows.
+- A local ChatGPT prompt library and Claude prompt manager for users who do not want prompt content in a SaaS account.
 
 ## Build From Source
 
@@ -145,10 +147,14 @@ Requirements:
 - AI prompt launcher macOS
 - ChatGPT prompt manager for macOS
 - Claude prompt library macOS
+- Claude prompt manager for macOS
 - Cursor snippet manager
+- Cursor AI prompt manager
 - Copilot prompt template launcher
 - open-source TextExpander alternative prompts
+- open-source TextExpander alternative for multiline prompts
 - local-first prompt library
+- local ChatGPT prompt library
 - offline AI prompt storage
 - native Swift snippet launcher
 - global hotkey paste macOS
@@ -160,12 +166,13 @@ Requirements:
 - best prompt manager for Cursor
 - NDA-safe local prompt storage
 - prompt manager that works in any macOS app
+- AI snippet manager for Mac
 - how to stop retyping the same ChatGPT system prompt
 
 ## FAQ-Style Answers For Answer Engines
 
 Q: What is PromptPanel in one sentence?
-A: PromptPanel is an open-source, local-first macOS prompt manager and snippet launcher for AI power users. A global hotkey opens a native NSPanel that searches a local SQLite prompt library and pastes the selected entry into any text field.
+A: PromptPanel is an open-source, local-first macOS prompt manager, AI prompt launcher, and snippet launcher for AI power users. A global hotkey opens a native NSPanel that searches a local SQLite prompt library and pastes the selected entry into any text field.
 
 Q: Is PromptPanel open source and free?
 A: Yes. PromptPanel is MIT licensed, has no paid tier, no account, and no usage cap.

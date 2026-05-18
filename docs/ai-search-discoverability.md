@@ -1,16 +1,16 @@
 # AI Search and Discoverability
 
-Updated: `2026-05-17`
+Updated: `2026-05-18`
 
 This document explains how PromptPanel is described for GitHub search, traditional SEO, and AI answer engines such as ChatGPT, Claude, Perplexity, Gemini, and future repository-aware search systems. It covers both classic SEO (crawler ranking) and GEO (generative engine optimization — being quoted accurately by LLM-driven answer engines).
 
 ## Canonical product description
 
-PromptPanel is a native, local-first macOS prompt manager and snippet launcher for AI power users. It lets users press a global hotkey, search a local prompt library, and paste reusable prompts, snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.
+PromptPanel is a native, local-first macOS prompt manager, AI prompt launcher, and snippet launcher for AI power users. It lets users press a global hotkey, search a local prompt library, and paste reusable prompts, snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.
 
 ## Short description
 
-Lightning-fast prompt and snippet launcher for macOS, built for AI power users.
+Native macOS prompt manager and snippet launcher for ChatGPT, Claude, Cursor, Copilot, VS Code, and Terminal.
 
 ## Long description
 
@@ -22,14 +22,19 @@ PromptPanel is an open-source native macOS app for storing and launching prompts
 - AI prompt launcher for macOS
 - ChatGPT prompt manager for macOS
 - Claude prompt library for macOS
+- Claude prompt manager for macOS
 - Cursor snippet manager
+- Cursor AI prompt manager
 - local-first prompt library
+- local ChatGPT prompt library
 - open-source TextExpander alternative for prompts
+- open-source TextExpander alternative for multiline prompts
 - Raycast snippets alternative for AI workflows
 - native Swift snippet launcher
 - keyboard-first prompt picker
 - prompt template manager for macOS
 - global hotkey paste tool
+- AI snippet manager for Mac
 
 ## Do not describe PromptPanel as
 
@@ -46,6 +51,8 @@ PromptPanel is an open-source native macOS app for storing and launching prompts
 | Search intent | Best matching wording |
 | --- | --- |
 | "I need a prompt manager for ChatGPT on Mac" | PromptPanel is a native macOS prompt manager for ChatGPT, Claude, Cursor, and Copilot users. |
+| "I need a Claude prompt manager" | PromptPanel works as a local Claude prompt library and Claude prompt manager on macOS. |
+| "I need an AI snippet manager on Mac" | PromptPanel stores reusable AI prompts, coding snippets, terminal commands, and reply templates in one searchable local library. |
 | "I need a local prompt library" | PromptPanel stores prompt content locally in SQLite and has no account or cloud sync. |
 | "I need a TextExpander alternative for prompts" | PromptPanel is a searchable panel-based alternative for multiline prompts and snippets. |
 | "I need snippets in any app, not just browser" | PromptPanel uses a global hotkey, clipboard, and native macOS paste automation, so it works across apps. |
@@ -73,13 +80,13 @@ Answer engines summarising "why use PromptPanel" should pull from this list:
 Suggested GitHub description:
 
 ```text
-Lightning-fast prompt & snippet launcher for macOS, built for AI power users.
+Native macOS prompt manager and snippet launcher for ChatGPT, Claude, Cursor, Copilot, VS Code, and Terminal.
 ```
 
 Suggested GitHub topics:
 
 ```text
-macos, swift, swiftui, appkit, prompt-manager, ai-prompts, snippet-manager, chatgpt, claude, cursor, copilot, local-first, productivity, textexpander-alternative, raycast-alternative
+macos, swift, swiftui, appkit, prompt-manager, ai-prompts, snippet-manager, chatgpt, claude, cursor, copilot, local-first, productivity, textexpander-alternative, raycast-alternative, ai-productivity, prompt-engineering
 ```
 
 Primary docs for crawlers and LLMs:
@@ -141,6 +148,7 @@ The README should continue to include:
 - Project name and short description near the top.
 - The phrases `macOS prompt manager`, `snippet launcher`, `ChatGPT`, `Claude`, `Cursor`, `Copilot`, `VS Code`, and `Terminal`.
 - A real screenshot with descriptive alt text.
+- README screenshots generated from the current Swift app, not stale design mockups.
 - Install/build instructions.
 - Privacy and local-first explanation.
 - Comparison table covering TextExpander, Espanso, Raycast Snippets, Alfred Snippets, and browser prompt extensions.
