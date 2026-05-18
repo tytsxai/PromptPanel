@@ -178,6 +178,20 @@ if [[ -x /usr/libexec/PlistBuddy ]]; then
     app_short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PromptPanel/Resources/Info.plist)"
     check_contains "codemeta.json" "\"version\": \"$app_short_version\""
     check_contains "docs/search-metadata.schema.jsonld" "\"softwareVersion\": \"$app_short_version\""
+
+    # Minimum macOS version must agree across the three surfaces that promise it. Drift here
+    # would let a build claim 14.0 in Info.plist while documentation says otherwise.
+    info_plist_min_macos="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' Sources/PromptPanel/Resources/Info.plist)"
+    info_plist_major="${info_plist_min_macos%%.*}"
+    if ! grep -Fq ".macOS(.v${info_plist_major})" Package.swift; then
+        fail "Package.swift platform does not match Info.plist LSMinimumSystemVersion ($info_plist_min_macos); expected .macOS(.v${info_plist_major})"
+    fi
+    if ! grep -Fq "macOS ${info_plist_major}+" README.md; then
+        fail "README.md is missing the 'macOS ${info_plist_major}+' claim that matches Info.plist LSMinimumSystemVersion ($info_plist_min_macos)"
+    fi
+    if ! grep -Fq "macOS ${info_plist_major}+" README.zh-CN.md; then
+        fail "README.zh-CN.md is missing the 'macOS ${info_plist_major}+' claim that matches Info.plist LSMinimumSystemVersion ($info_plist_min_macos)"
+    fi
 else
     printf '[docs-check][warn] PlistBuddy is unavailable; skipped app version metadata alignment\n' >&2
 fi

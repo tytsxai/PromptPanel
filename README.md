@@ -89,7 +89,7 @@ If "I copy and paste the same multiline prompt twenty times a day" describes you
 - 🔐 **Permission-aware degradation** — without Accessibility, you still get one-key copy and a clear UI hint
 - 📝 **Multiline content** — full template bodies, no length limit on storage
 - 📊 **Execution log** for diagnosing paste failures
-- 🔄 **Auto-update** via Sparkle (you can disable it)
+- 🔄 **Manual update via GitHub Releases** (Sparkle auto-update is wired in but ships off-by-default; the maintainer will enable it once a signed appcast feed is hosted)
 
 ### Explicitly *not* doing (project boundaries)
 
@@ -177,7 +177,7 @@ You can switch the active project from inside the panel without opening the main
 | Global hotkey | Settings → Hotkey | One shortcut. Toggle behavior: same key dismisses |
 | Theme | Settings → Appearance | Light / dark / follow system |
 | Launch at login | Settings → General | Uses `SMAppService` |
-| Auto-update | Settings → Updates | Powered by Sparkle 2; can be disabled |
+| Update channel | GitHub Releases (manual) | Sparkle 2 is wired in but disabled until a signed appcast is hosted; subscribe to release notifications and replace the `.app` |
 | Database location | `~/Library/Application Support/PromptPanel/promptpanel.db` | Single-file SQLite, easy to back up |
 | Logs | `~/Library/Logs/PromptPanel/` | Inspected via the main window's "Runtime Health" |
 
@@ -185,7 +185,7 @@ You can switch the active project from inside the panel without opening the main
 
 - **Local-first by definition.** Your prompts live in a single SQLite file on your Mac. The app does not POST your content anywhere.
 - **No telemetry.** No analytics SDKs, no metrics endpoints, no crash reporting service.
-- **Network access** is limited to Sparkle's update check (a single signed-feed fetch, opt-out in Settings).
+- **Network access** is zero in the current release. Sparkle is bundled but the update feed is not configured, so no outbound calls happen at all unless a future build ships with an appcast.
 - **No accounts.** There is nothing to sign in to.
 - **Open source.** Audit `Sources/PromptPanel/Core/` to verify any of the above.
 
@@ -314,7 +314,7 @@ Yes — it builds as a universal binary. Tested on both Apple Silicon and Intel 
 
 ### Does it send my prompts anywhere?
 
-No. The only network call is the Sparkle update feed, which fetches release metadata only and can be turned off in Settings. Your prompt content never leaves your Mac.
+No. The current release makes zero network calls. Sparkle is bundled but the update feed is not configured in this build, so no outbound traffic happens at all. Your prompt content never leaves your Mac.
 
 ### Why does it ask for Accessibility permission?
 

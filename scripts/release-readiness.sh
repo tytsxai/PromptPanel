@@ -188,6 +188,20 @@ if [[ $PUBLIC_DISTRIBUTION -eq 1 && $TEST_RUNNER_AVAILABLE -eq 0 ]]; then
     fail "Public distribution precheck failed because xctest is unavailable on this machine."
 fi
 
+# Public distribution always needs a monotonically increasing CFBundleVersion so Sparkle (when
+# enabled) and macOS update logic can distinguish releases. If the caller did not pass one,
+# derive it from the current git history. This avoids the silent footgun where a forgotten
+# --build-version ships a 1.0.x update that already-installed clients see as "same version".
+if [[ $PUBLIC_DISTRIBUTION -eq 1 && -z "$BUILD_VERSION_OVERRIDE" ]]; then
+    if command -v git >/dev/null 2>&1 && git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        BUILD_VERSION_OVERRIDE="$(git -C "$REPO_ROOT" rev-list --count HEAD)"
+        [[ -n "$BUILD_VERSION_OVERRIDE" ]] || fail "Failed to derive CFBundleVersion from git history."
+        log_info "Auto-injecting CFBundleVersion from git history: $BUILD_VERSION_OVERRIDE"
+    else
+        fail "Public distribution requires --build-version (no git history available to derive it)."
+    fi
+fi
+
 build_args=(
     --output-dir "$OUTPUT_ROOT"
     --sign-identity "$SIGN_IDENTITY"
@@ -230,6 +244,18 @@ if [[ "$SIGN_IDENTITY" == "none" ]]; then
     if ! grep -Fq "designated => identifier \"$BUNDLE_IDENTIFIER\"" <<<"$DESIGNATED_REQUIREMENT"; then
         fail "Ad-hoc build did not retain a stable designated requirement: $DESIGNATED_REQUIREMENT"
     fi
+fi
+
+# Assert that entitlements were actually embedded. The build script silently no-ops if the
+# entitlements file is missing; without this check we would only discover that hardened
+# runtime apps shipped without entitlements after Sparkle's autoupdate XPC fails on a user
+# machine. Run for every build mode — entitlements are embedded for both ad-hoc and signed.
+EMBEDDED_ENTITLEMENTS="$(codesign -d --entitlements - --xml "$APP_PATH" 2>/dev/null || true)"
+if [[ -z "$EMBEDDED_ENTITLEMENTS" ]]; then
+    fail "Built app has no embedded entitlements; ensure build-app.sh passes --entitlements when signing the outer bundle."
+fi
+if ! grep -Fq "com.apple.security.cs.disable-library-validation" <<<"$EMBEDDED_ENTITLEMENTS"; then
+    fail "Built app is missing the Sparkle-required entitlement com.apple.security.cs.disable-library-validation."
 fi
 
 UNPACK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/promptpanel-unpacked.XXXXXX")"

@@ -117,6 +117,7 @@ codesign_path() {
     local target_path="$1"
     local runtime_mode="${2:-off}"
     local stable_designated_requirement="${3:-off}"
+    local entitlements_path="${4:-}"
     local args=(--force)
 
     if [[ "$SIGN_IDENTITY" == "none" ]]; then
@@ -132,6 +133,10 @@ codesign_path() {
         if [[ "$runtime_mode" == "runtime" ]]; then
             args+=(--options runtime)
         fi
+    fi
+
+    if [[ -n "$entitlements_path" && -f "$entitlements_path" ]]; then
+        args+=(--entitlements "$entitlements_path")
     fi
 
     codesign "${args[@]}" "$target_path"
@@ -250,7 +255,9 @@ if [[ "$SIGN_IDENTITY" != "none" ]]; then
     echo "Signing app with identity: ${SIGN_IDENTITY}"
 fi
 
-codesign_path "${APP_PATH}" runtime on
+ENTITLEMENTS_PATH="${PACKAGE_ROOT}/Sources/PromptPanel/Resources/PromptPanel.entitlements"
+[[ -f "$ENTITLEMENTS_PATH" ]] || { echo "Entitlements file not found: $ENTITLEMENTS_PATH" >&2; exit 1; }
+codesign_path "${APP_PATH}" runtime on "$ENTITLEMENTS_PATH"
 
 codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
 

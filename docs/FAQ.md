@@ -44,7 +44,18 @@ Both locations can be isolated for QA with the environment variables documented 
 
 ## Does PromptPanel upload prompt content?
 
-No. Core prompt storage, search, execution, and logging are local. Network access is limited to Sparkle update checks when update metadata is configured and enabled.
+No. Core prompt storage, search, execution, and logging are local. The current release also makes zero outbound calls — Sparkle is bundled but the appcast feed and signing key are not configured in this build, so no update probe happens at all.
+
+## How do I upgrade PromptPanel?
+
+The current release ships with the auto-update path intentionally disabled (no signed appcast is hosted yet). To upgrade:
+
+1. Quit PromptPanel from the menu bar.
+2. Download the latest `PromptPanel-<version>+<build>-macos.zip` from GitHub Releases and unzip it.
+3. Replace `/Applications/PromptPanel.app` with the new bundle.
+4. Reopen PromptPanel and confirm the version in `Settings → 运行健康`.
+
+Your data lives in `~/Library/Application Support/PromptPanel` and is preserved across upgrades. The launch maintenance routine writes a backup automatically; you can also click `立即备份` in Settings before swapping the app.
 
 ## Is PromptPanel a ChatGPT prompt manager or Claude prompt library?
 
