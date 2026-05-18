@@ -3114,6 +3114,211 @@ func swiftUIPrimaryClickSurfacesUseExpandedHitTargets() throws {
     #expect(quickPanel.components(separatedBy: ".roundedHitTarget").count >= 6)
     #expect(settings.components(separatedBy: ".roundedHitTarget(cornerRadius: 5)").count >= 3)
 }
+
+/// `restore-backup.sh` hardcodes the list of tables that must exist in a backup before it is
+/// accepted as a valid PromptPanel database. That hand-maintained list silently drifts every
+/// time a migration adds or drops a table: a dropped table leaves the script rejecting
+/// legitimate fresh backups, and an added table leaves the script accepting truncated backups
+/// that would corrupt user data after restore. Lock both directions to the live schema.
+@Test
+func testRestoreScriptRequiredTablesStayInSyncWithLiveSchema() throws {
+    let temporaryDatabaseURL = try makeTemporaryDatabaseURL()
+    let databaseManager = try DatabaseManager(url: temporaryDatabaseURL)
+
+    let liveSchemaNames: Set<String> = try databaseManager.dbQueue.read { db in
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT name FROM sqlite_master
+            WHERE type IN ('table', 'view')
+              AND name NOT LIKE 'sqlite_%'
+        """)
+        return Set(rows.compactMap { $0["name"] as String? })
+    }
+
+    let scriptText = try readRepositoryText("scripts/restore-backup.sh")
+    let requiredTables = try parseShellArray(named: "REQUIRED_TABLES", from: scriptText)
+    #expect(!requiredTables.isEmpty, "Could not parse REQUIRED_TABLES from restore-backup.sh; the regex likely needs to be updated.")
+
+    // Direction 1: every entry in REQUIRED_TABLES must exist in a freshly-migrated database.
+    for table in requiredTables {
+        #expect(liveSchemaNames.contains(table),
+                "restore-backup.sh REQUIRED_TABLES lists '\(table)' but it does not exist in the live schema. Either re-add the table in a migration or remove it from the script.")
+    }
+
+    // Direction 2: every primary user-facing table in the live schema must be validated on
+    // restore. FTS5 creates internal auxiliaries (entries_fts_config / _data / _idx / _docsize
+    // / _content) that exist as a side effect of the virtual table and don't need explicit
+    // validation; everything else does.
+    let ftsAuxSuffixes = ["_config", "_data", "_idx", "_docsize", "_content"]
+    let primaryUserTables = liveSchemaNames.filter { name in
+        // Keep `entries_fts` itself (the virtual table); drop its shadow auxiliaries.
+        guard name != "entries_fts" else { return true }
+        return !ftsAuxSuffixes.contains { name.hasSuffix($0) }
+    }
+    let missingFromScript = primaryUserTables.subtracting(Set(requiredTables))
+    let missingList = missingFromScript.sorted().joined(separator: ", ")
+    #expect(missingFromScript.isEmpty,
+            "The live schema has primary tables that restore-backup.sh does not validate: \(missingList). Add them to REQUIRED_TABLES in scripts/restore-backup.sh.")
+}
+
+/// `pruneRecoveryDirectories(keeping:)` is a best-effort housekeeper called every launch.
+/// It must keep the most recent N snapshots and only delete from the trailing end so a
+/// human investigator can still find the freshest evidence after a crash. It must also
+/// refuse to touch in-flight staging directories so a concurrent restore is not corrupted.
+@MainActor
+@Test
+func testPruneRecoveryDirectoriesKeepsRecentAndSkipsStaging() throws {
+    let temporaryDatabaseURL = try makeTemporaryDatabaseURL()
+    let databaseManager = try DatabaseManager(url: temporaryDatabaseURL)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let storage = StorageMaintenanceService(
+        dbQueue: databaseManager.dbQueue,
+        logRepository: logRepository,
+        databaseURL: databaseManager.databaseURL
+    )
+
+    let recoveryRoot = Constants.recoveryDirectory(for: databaseManager.databaseURL)
+    try FileManager.default.createDirectory(at: recoveryRoot, withIntermediateDirectories: true)
+
+    // Create 8 recovered snapshots with distinct modification timestamps. The oldest 3 should
+    // be pruned when keeping 5; the most recent 5 must survive.
+    var createdDirectories: [URL] = []
+    let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+    for index in 0..<8 {
+        let snapshotURL = recoveryRoot.appendingPathComponent("recovered-2026-05-\(String(format: "%02d", index + 1))T00-00-00Z", isDirectory: true)
+        try FileManager.default.createDirectory(at: snapshotURL, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.modificationDate: baseDate.addingTimeInterval(TimeInterval(index) * 60)], ofItemAtPath: snapshotURL.path)
+        createdDirectories.append(snapshotURL)
+    }
+
+    // Add an in-flight staging directory with an old timestamp; it must not be deleted even
+    // though it would otherwise be the oldest.
+    let stagingURL = recoveryRoot.appendingPathComponent("manual-restore-staging-1900-01-01T00-00-00Z", isDirectory: true)
+    try FileManager.default.createDirectory(at: stagingURL, withIntermediateDirectories: true)
+    try FileManager.default.setAttributes([.modificationDate: baseDate.addingTimeInterval(-3600)], ofItemAtPath: stagingURL.path)
+
+    storage.pruneRecoveryDirectories(keeping: 5)
+
+    let surviving = try FileManager.default.contentsOfDirectory(atPath: recoveryRoot.path)
+    let survivingNames = Set(surviving)
+    // The five newest snapshots are indexes 3..7.
+    for index in 3..<8 {
+        #expect(survivingNames.contains(createdDirectories[index].lastPathComponent),
+                "Newer recovery snapshot \(createdDirectories[index].lastPathComponent) was pruned but should have been kept.")
+    }
+    // The three oldest snapshots are indexes 0..2.
+    for index in 0..<3 {
+        #expect(!survivingNames.contains(createdDirectories[index].lastPathComponent),
+                "Older recovery snapshot \(createdDirectories[index].lastPathComponent) was kept but should have been pruned.")
+    }
+    // Staging directory must never be touched even though it is the oldest mtime.
+    #expect(survivingNames.contains(stagingURL.lastPathComponent),
+            "Staging directory was pruned; restore-backup.sh staging copies must never be touched by maintenance.")
+}
+
+/// `DiagnosticsExportService` must emit a zip that contains the documented files, refuse to
+/// leak any entry content, and not crash when the unified-log source is empty. Use a fake
+/// log source and a fake permission provider so the test does not depend on the live OS.
+@MainActor
+@Test
+func testDiagnosticsExportBundleProducesPrivacySafeZip() throws {
+    let temporaryDatabaseURL = try makeTemporaryDatabaseURL()
+    let databaseManager = try DatabaseManager(url: temporaryDatabaseURL)
+    let logRepository = LogRepository(dbQueue: databaseManager.dbQueue)
+    let storage = StorageMaintenanceService(
+        dbQueue: databaseManager.dbQueue,
+        logRepository: logRepository,
+        databaseURL: databaseManager.databaseURL
+    )
+
+    // Record one execution log so the bundle has a non-empty execution-logs.json. Note the
+    // ExecutionLog model itself never carries entry title or content — only the entry id.
+    try logRepository.record(ExecutionLog(
+        entryId: "entry-uuid-secret-12345",
+        projectId: "project-uuid",
+        frontAppBundleId: "com.example.frontmost",
+        hasAccessibility: true,
+        clipboardSuccess: true,
+        pasteAttempted: true,
+        pasteSuccess: true,
+        result: Constants.ExecutionResult.success.rawValue
+    ))
+
+    let permission = FakePermissionProvider(isAccessibilityGranted: true)
+    let unifiedLogs = FakeUnifiedLogReader(lines: ["{\"ts\":\"2026-05-19T00:00:00Z\",\"level\":\"info\",\"message\":\"boot\"}"])
+    let service = DiagnosticsExportService(
+        logRepository: logRepository,
+        storageMaintenanceService: storage,
+        permissionService: permission,
+        appInfo: DiagnosticsExportService.AppInfoProvider(
+            bundleIdentifier: "com.promptpanel.app.test",
+            shortVersion: "1.0.0",
+            buildVersion: "999",
+            minimumSystemVersion: "14.0"
+        ),
+        unifiedLogReader: unifiedLogs
+    )
+
+    let destinationDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("PromptPanelTests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+    let zipURL = destinationDir.appendingPathComponent("diagnostics.zip")
+    let producedURL = try service.exportBundle(to: zipURL)
+    #expect(FileManager.default.fileExists(atPath: producedURL.path))
+
+    // Unzip and inspect.
+    let unpackDir = destinationDir.appendingPathComponent("unpacked", isDirectory: true)
+    try FileManager.default.createDirectory(at: unpackDir, withIntermediateDirectories: true)
+    let ditto = Process()
+    ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+    ditto.arguments = ["-x", "-k", producedURL.path, unpackDir.path]
+    try ditto.run()
+    ditto.waitUntilExit()
+    #expect(ditto.terminationStatus == 0)
+
+    let bundleRoots = try FileManager.default.contentsOfDirectory(at: unpackDir, includingPropertiesForKeys: nil)
+    #expect(bundleRoots.count == 1)
+    guard let bundleRoot = bundleRoots.first else { return }
+
+    let expectedFiles = ["README.txt", "app-info.json", "permissions.json", "health-snapshot.json", "execution-logs.json", "unified-logs.ndjson"]
+    for name in expectedFiles {
+        let fileURL = bundleRoot.appendingPathComponent(name)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path), "Diagnostics bundle missing \(name)")
+    }
+
+    // Privacy guard: no file in the bundle may contain the literal string "content" or
+    // "title" as a JSON key, nor any entry body. The fact that ExecutionLog model has no
+    // such fields gives us strong confidence; assert by scanning every file.
+    let entryBodyCanary = "this-should-never-appear-in-a-diagnostics-bundle"
+    let allURLs = (try? FileManager.default.contentsOfDirectory(at: bundleRoot, includingPropertiesForKeys: nil)) ?? []
+    for url in allURLs {
+        let contents = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        #expect(!contents.contains(entryBodyCanary))
+        #expect(!contents.contains("\"content\":"), "Diagnostics bundle file \(url.lastPathComponent) contains a 'content' JSON key.")
+        #expect(!contents.contains("\"title\":"), "Diagnostics bundle file \(url.lastPathComponent) contains a 'title' JSON key.")
+    }
+
+    try? FileManager.default.removeItem(at: destinationDir)
+}
+
+private final class FakeUnifiedLogReader: UnifiedLogReading {
+    private let lines: [String]
+    init(lines: [String]) { self.lines = lines }
+    func readEntries(subsystem: String, since: Date) throws -> [String] { lines }
+}
+
+private func parseShellArray(named: String, from script: String) throws -> [String] {
+    let pattern = #"\#(named)=\(([^)]*)\)"#
+    let regex = try NSRegularExpression(pattern: pattern, options: [])
+    let range = NSRange(script.startIndex..., in: script)
+    guard let match = regex.firstMatch(in: script, options: [], range: range),
+          let bodyRange = Range(match.range(at: 1), in: script) else {
+        return []
+    }
+    return script[bodyRange]
+        .split(separator: "\n")
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+}
 #endif
 
 private final class FakeHotkeyRegistrar: HotkeyRegistrationHandling {

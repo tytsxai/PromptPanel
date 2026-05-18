@@ -49,6 +49,7 @@ final class StorageMaintenanceService: @unchecked Sendable {
             _ = try createBackup(reason: "launch")
         }
         try pruneBackups(reason: "launch", keeping: Constants.automaticBackupRetentionCount)
+        pruneRecoveryDirectories(keeping: Constants.recoveryDirectoryRetentionCount)
         return try healthSnapshot()
     }
 
@@ -128,6 +129,57 @@ final class StorageMaintenanceService: @unchecked Sendable {
             try? fileManager.removeItem(at: destinationURL)
             PPLogger.database.error("Failed to create database backup: \(error.localizedDescription)")
             throw error
+        }
+    }
+
+    /// Keep only the most recent `count` recovery snapshots so that a machine that quarantines
+    /// stores repeatedly does not accumulate unbounded files. Failures here are non-fatal —
+    /// recovery directories are diagnostic, not load-bearing.
+    func pruneRecoveryDirectories(keeping count: Int) {
+        guard count >= 0 else { return }
+        let recoveryRoot = Constants.recoveryDirectory(for: databaseURL)
+        guard fileManager.fileExists(atPath: recoveryRoot.path) else { return }
+
+        let candidates: [URL]
+        do {
+            candidates = try fileManager.contentsOfDirectory(
+                at: recoveryRoot,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            PPLogger.database.error("Failed to enumerate recovery directory: \(error.localizedDescription)")
+            return
+        }
+
+        let directories = candidates.compactMap { url -> URL? in
+            let prefix = url.lastPathComponent
+            guard prefix.hasPrefix("recovered-") || prefix.hasPrefix("manual-restore-") else {
+                return nil
+            }
+            // Skip in-flight staging copies; restore-backup.sh removes them via trap on exit, but
+            // we should never delete one mid-operation even if the trap was skipped.
+            if prefix.hasPrefix("manual-restore-staging-") {
+                return nil
+            }
+            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            return isDirectory ? url : nil
+        }
+
+        let sorted = directories.sorted { lhs, rhs in
+            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return lhsDate > rhsDate
+        }
+
+        guard sorted.count > count else { return }
+        for directory in sorted.dropFirst(count) {
+            do {
+                try fileManager.removeItem(at: directory)
+                PPLogger.database.info("Pruned recovery directory \(directory.lastPathComponent)")
+            } catch {
+                PPLogger.database.warning("Failed to prune recovery directory \(directory.lastPathComponent): \(error.localizedDescription)")
+            }
         }
     }
 

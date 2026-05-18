@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import KeyboardShortcuts
+import UniformTypeIdentifiers
 
 @MainActor
 final class MainWindowViewModel: ObservableObject {
@@ -629,6 +630,36 @@ final class MainWindowViewModel: ObservableObject {
         } catch {
             PPLogger.database.error("Failed to create manual backup: \(error.localizedDescription)")
             bannerMessage = "创建备份失败，请稍后重试。"
+        }
+    }
+
+    /// Lets the user assemble and save a diagnostics zip (privacy-safe — no entry content).
+    /// Shows an NSSavePanel for destination; on success reveals the resulting zip in Finder.
+    func exportDiagnosticsBundle() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "导出诊断包"
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        savePanel.nameFieldStringValue = "PromptPanel-Diagnostics-\(timestamp).zip"
+        savePanel.allowedContentTypes = [.zip]
+        savePanel.canCreateDirectories = true
+
+        guard savePanel.runModal() == .OK, let destinationURL = savePanel.url else {
+            return
+        }
+
+        let service = DiagnosticsExportService(
+            logRepository: logRepository,
+            storageMaintenanceService: storageMaintenanceService,
+            permissionService: permissionService
+        )
+        do {
+            let zipURL = try service.exportBundle(to: destinationURL)
+            bannerMessage = "诊断包已保存：\(zipURL.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([zipURL])
+        } catch {
+            PPLogger.app.error("Failed to export diagnostics bundle: \(error.localizedDescription)")
+            bannerMessage = error.localizedDescription
         }
     }
 

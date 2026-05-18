@@ -108,6 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private var mainWindow: NSWindow?
     private let launchMaintenanceQueue = DispatchQueue(label: "PromptPanel.launch-maintenance", qos: .utility)
+    private var panelOriginPersistWorkItem: DispatchWorkItem?
+    private static let panelOriginPersistDebounceInterval: DispatchTimeInterval = .milliseconds(250)
 
     private(set) var databaseManager: DatabaseManager!
     private(set) var appState: AppState!
@@ -201,8 +203,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyService?.stop()
+        flushPendingPanelOriginPersistence()
         storageMaintenanceService?.prepareForTermination()
         PPLogger.app.info("Application will terminate")
+    }
+
+    /// NSWindow emits `windowDidMove` continuously while the user drags the panel; without
+    /// debouncing we would issue dozens of SQLite writes per drag. Coalesce into a single
+    /// settle write 250ms after the last movement, and flush any pending write on terminate
+    /// so we never lose the final position.
+    private func schedulePanelOriginPersistence(_ origin: NSPoint) {
+        panelOriginPersistWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            do {
+                try self.settingsRepository.setPanelWindowOrigin(origin)
+            } catch {
+                PPLogger.panel.error("Failed to persist panel window origin: \(error.localizedDescription)")
+            }
+        }
+        panelOriginPersistWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.panelOriginPersistDebounceInterval, execute: workItem)
+    }
+
+    private func flushPendingPanelOriginPersistence() {
+        guard let workItem = panelOriginPersistWorkItem else { return }
+        panelOriginPersistWorkItem = nil
+        workItem.cancel()
+        workItem.perform()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -353,11 +381,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
         panelService.onPanelWindowOriginChanged = { [weak self] origin in
-            do {
-                try self?.settingsRepository.setPanelWindowOrigin(origin)
-            } catch {
-                PPLogger.panel.error("Failed to persist panel window origin: \(error.localizedDescription)")
-            }
+            self?.schedulePanelOriginPersistence(origin)
         }
 
         trayManager = TrayManager(

@@ -893,6 +893,9 @@ private struct MaintenanceSection: View {
                 SettingsPillButton("备份目录", systemImage: "tray.full", fillsAvailableWidth: true) {
                     viewModel.openBackupDirectory()
                 }
+                SettingsPillButton("导出诊断", systemImage: "doc.zipper", fillsAvailableWidth: true) {
+                    viewModel.exportDiagnosticsBundle()
+                }
                 SettingsPillButton("清理日志", systemImage: "trash", tone: .danger, fillsAvailableWidth: true) {
                     viewModel.cleanupLogs()
                 }

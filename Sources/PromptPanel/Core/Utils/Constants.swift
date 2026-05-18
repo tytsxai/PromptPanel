@@ -182,6 +182,7 @@ enum Constants {
     static let automaticBackupRetentionCount = 7
     static let automaticBackupMinimumInterval: TimeInterval = 12 * 60 * 60
     static let executionLogRetentionDays = 30
+    static let recoveryDirectoryRetentionCount = 5
     static let secureDirectoryPermissions = 0o700
     static let secureFilePermissions = 0o600
 
