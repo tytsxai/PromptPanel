@@ -6,6 +6,20 @@ The format is based on Keep a Changelog, and this project uses Conventional Comm
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-19
+
+### Added
+
+- **README — Workflow examples section** capturing concrete "how do I..." use cases (fresh ChatGPT/Claude role prompt, Cursor project-context paste, code-review checklists, terminal command snippets, meeting-notes templates, Slack/email replies, project-isolated prompt sets). These double as long-tail SEO/GEO surfaces.
+
+### Changed
+
+- README structure now leads from the comparison table into concrete workflow examples for stronger generative-engine answers.
+
+### Notes
+
+Documentation-only release. No app behavior, hotkey, paste path, or storage format changes since 1.0.0.
+
 ## [1.0.0] - 2026-05-17
 
 First public release. Aligns the `Info.plist`, `codemeta.json`, and `docs/search-metadata.schema.jsonld` version surfaces with the shipped artifact.
@@ -39,5 +53,6 @@ First public release. Aligns the `Info.plist`, `codemeta.json`, and `docs/search
 
 - No remote authentication, telemetry, or cloud sync paths are introduced. Prompt content remains local in SQLite; the only network traffic is the optional Sparkle update check.
 
-[Unreleased]: https://github.com/tytsxai/PromptPanel/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/tytsxai/PromptPanel/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/tytsxai/PromptPanel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/tytsxai/PromptPanel/releases/tag/v1.0.0

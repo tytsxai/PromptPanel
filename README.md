@@ -8,7 +8,7 @@
 
 PromptPanel is a local-first **macOS prompt manager**, **AI prompt launcher**, and **snippet launcher**. Press a global hotkey, search your local **prompt library**, and paste reusable prompts, code snippets, templates, and instructions into **ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any text field**.
 
-[![Release: v1.0.0](https://img.shields.io/badge/Release-v1.0.0-blue.svg)](CHANGELOG.md)
+[![Release: v1.0.1](https://img.shields.io/badge/Release-v1.0.1-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform: macOS 14+](https://img.shields.io/badge/Platform-macOS%2014%2B-lightgrey.svg)](https://www.apple.com/macos)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange.svg)](https://swift.org)
@@ -208,6 +208,18 @@ If your prompts contain proprietary information — internal architecture, clien
 | Built specifically around AI prompt workflow | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ but browser-only |
 
 **TL;DR:** if you live in the browser only, a browser extension is fine. If you live in Cursor/VS Code/Terminal/Slack/everywhere, you want something native and panel-based. Among native panel-based options, PromptPanel is the open-source, AI-prompt-shaped one.
+
+## Workflow examples
+
+Concrete ways people use PromptPanel day-to-day — these double as the long-tail "how do I..." questions PromptPanel is built to answer.
+
+- **Spin up a fresh ChatGPT / Claude chat with your standard role / system prompt.** Hotkey → type `role` → Enter. No more retyping "You are a senior staff engineer who..." for the 200th time.
+- **Drop a Cursor / Copilot project-context block into a new file.** Have a multi-paragraph "here is the architecture, conventions, and constraints" block stored once; paste into any new Cursor session with one keystroke.
+- **Paste a code-review checklist into a PR draft.** Long bulleted checklist lives in PromptPanel; one hotkey appends it to a GitHub PR description.
+- **Fire a repeating terminal command with the exact flag combo.** `kubectl get pods --context=prod --namespace=… -o jsonpath=…` — typed once, stored, summoned by short search string.
+- **Insert a meeting-notes template into Notion / Obsidian / Apple Notes.** Same template every Monday standup → one hotkey, zero copy-paste from a Notes app scratchpad.
+- **Push a customer-service / sales reply template into Slack or email.** Different tone per template, picked from a quick-search panel rather than a Notes folder.
+- **Switch between projects with isolated prompt sets.** Each project group keeps its own role prompts, snippets, and templates so context never bleeds across clients.
 
 ## Tech stack
 
