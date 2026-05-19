@@ -114,7 +114,7 @@
           "name": "Does PromptPanel send my prompts to the cloud?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Prompt content stays locally in SQLite at ~/Library/Application Support/PromptPanel/promptpanel.db. The only outbound traffic is the optional Sparkle update check, which fetches release metadata only."
+            "text": "No. Prompt content stays locally in SQLite at ~/Library/Application Support/PromptPanel/promptpanel.db. The current release also makes zero outbound network calls — Sparkle is bundled but its appcast feed is not configured in this build, so no update probe is dispatched. Prompt bodies never leave the Mac."
           }
         },
         {

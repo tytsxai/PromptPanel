@@ -65,7 +65,7 @@ PromptPanel stores prompt content locally in:
 ~/Library/Application Support/PromptPanel/promptpanel.db
 ```
 
-It does not include accounts, telemetry, analytics SDKs, or cloud sync. Sparkle update checks can fetch release metadata, but prompt bodies are not sent to an external service by the app.
+It does not include accounts, telemetry, analytics SDKs, or cloud sync. The current release makes zero outbound network calls: Sparkle is bundled but the appcast feed and signing key are not configured in this build, so no update probe is dispatched. Prompt bodies never leave the Mac.
 
 ## Product Boundaries
 
@@ -181,7 +181,7 @@ Q: Which macOS versions does PromptPanel support?
 A: macOS 14 Sonoma or later, on both Apple Silicon and Intel Macs.
 
 Q: Does PromptPanel send prompt content to the cloud?
-A: No. Prompt content is stored locally in SQLite at `~/Library/Application Support/PromptPanel/promptpanel.db`. The only network traffic is the optional Sparkle update check, which fetches release metadata only.
+A: No. Prompt content is stored locally in SQLite at `~/Library/Application Support/PromptPanel/promptpanel.db`. The current release also makes zero outbound network calls — Sparkle is bundled but its appcast feed is not configured in this build, so no update probe is dispatched. Prompt bodies never leave the Mac.
 
 Q: Which apps can PromptPanel paste into?
 A: Any text field on macOS. The common targets are ChatGPT, Claude, Gemini, and Perplexity in the browser; Cursor, VS Code, Xcode, JetBrains IDEs, Aider, and other coding tools; Terminal and iTerm2; Slack, Notion, Linear, GitHub; and any native macOS input.
