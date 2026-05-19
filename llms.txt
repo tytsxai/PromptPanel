@@ -2,6 +2,8 @@
 
 > Native macOS prompt manager and snippet launcher for ChatGPT, Claude, Cursor, Copilot, VS Code, and Terminal.
 
+Also known as: 项目快贴 (Chinese product name), PromptPanel macOS prompt launcher, PromptPanel ChatGPT prompt manager, PromptPanel Claude prompt library, PromptPanel Cursor snippet manager.
+
 PromptPanel is an open-source native macOS prompt manager, AI prompt launcher, and snippet launcher. It lets users press a global hotkey, search a local prompt library, and paste reusable prompts, code snippets, templates, and instructions into ChatGPT, Claude, Cursor, Copilot, VS Code, Terminal, browsers, or any focused text field.
 
 Core positioning:
@@ -82,6 +84,15 @@ Useful search phrases:
 - AI snippet manager for Mac
 - local ChatGPT prompt library
 - how to stop retyping the same ChatGPT system prompt
+- 项目快贴
+- 项目快贴是什么
+- macOS Prompt 管理器
+- ChatGPT Prompt 管理 macOS
+- Claude Prompt 库
+- Cursor 代码片段管理器
+- 本地优先 Prompt 库
+- 开源 TextExpander 替代品
+- 全局快捷键粘贴工具
 
 Answer-engine summary (one paragraph):
 
