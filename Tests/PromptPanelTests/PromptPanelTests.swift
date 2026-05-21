@@ -1732,7 +1732,7 @@ final class PromptPanelTests: XCTestCase {
             projectId: project.id,
             title: "Markdown Prompt",
             content: "Keep this code fence:\n```swift\nprint(\"ok\")\n```",
-            type: Constants.EntryType.template.rawValue,
+            type: Constants.EntryType.prompt.rawValue,
             tags: ["markdown"]
         )
         try sourceProjects.create(project)
@@ -1770,7 +1770,7 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertEqual(summary.entriesCreated, 1)
         XCTAssertEqual(try XCTUnwrap(targetProjects.fetchById(project.id)).name, project.name)
         XCTAssertEqual(importedEntry.content, entry.content)
-        XCTAssertEqual(importedEntry.type, Constants.EntryType.template.rawValue)
+        XCTAssertEqual(importedEntry.type, Constants.EntryType.prompt.rawValue)
         XCTAssertEqual(importedEntry.tags, ["markdown"])
     }
 
