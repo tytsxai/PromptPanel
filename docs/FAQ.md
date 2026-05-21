@@ -42,6 +42,10 @@ Runtime logs are written under:
 
 Both locations can be isolated for QA with the environment variables documented in `docs/配置说明.md`.
 
+## How do I import or export my prompt library?
+
+Open `Settings → Maintenance`. Use `Export JSON` / `Import JSON` for lossless PromptPanel-to-PromptPanel migration, or `Export MD` / `Import MD` when you want a reviewable Markdown file. Every import creates a local database backup before writing projects or entries.
+
 ## Does PromptPanel upload prompt content?
 
 No. Core prompt storage, search, execution, and logging are local. The current release also makes zero outbound calls — Sparkle is bundled but the appcast feed and signing key are not configured in this build, so no update probe happens at all.
@@ -51,8 +55,8 @@ No. Core prompt storage, search, execution, and logging are local. The current r
 The current release ships with the auto-update path intentionally disabled (no signed appcast is hosted yet). To upgrade:
 
 1. Quit PromptPanel from the menu bar.
-2. Download the latest `PromptPanel-<version>+<build>-macos.zip` from GitHub Releases and unzip it.
-3. Replace `/Applications/PromptPanel.app` with the new bundle.
+2. Build the latest source with `./scripts/build-app.sh`; current GitHub Releases do not attach notarized binary assets yet.
+3. Replace `/Applications/PromptPanel.app` with the newly built bundle, or run `dist/PromptPanel.app` directly for local QA.
 4. Reopen PromptPanel and confirm the version in `Settings → 运行健康`.
 
 Your data lives in `~/Library/Application Support/PromptPanel` and is preserved across upgrades. The launch maintenance routine writes a backup automatically; you can also click `立即备份` in Settings before swapping the app.
@@ -106,7 +110,7 @@ Update `frontend-draft/` first because it is the visual source of truth. Then al
 
 ## Where is the roadmap?
 
-The public roadmap and contribution scope are in `docs/路线图与贡献指南.md`. Import/export, repeat last entry, search/tag improvements, and compatibility samples are in scope; cloud sync, teams, and workflow orchestration are not.
+The public roadmap and contribution scope are in `docs/路线图与贡献指南.md`. JSON/Markdown import/export is now built into `Settings → Maintenance`; repeat last entry, search/tag improvements, and compatibility samples remain in scope. Cloud sync, teams, and workflow orchestration are not.
 
 ## What version is current?
 

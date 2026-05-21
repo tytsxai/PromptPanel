@@ -151,7 +151,7 @@ Requirements for building:
 
 ### Option B — Signed & notarized release
 
-Once a tagged release is published, a notarized `.dmg` will be attached. Until then, build locally — it takes ~30 seconds on Apple Silicon.
+GitHub Releases currently carry source/documentation release notes only; no notarized binary asset is attached yet. Until the Developer ID notarization chain is complete, build locally — it takes ~30 seconds on Apple Silicon.
 
 ### First-run setup
 
@@ -306,8 +306,8 @@ PromptPanel keeps classic SEO and GEO surfaces in-repo so users and answer engin
 PromptPanel follows a **deliberately small** roadmap. The PRD lists items that are explicitly off the table forever (cloud sync, teams, workflow orchestration). Within scope:
 
 - [x] v1.0 — main link complete: hotkey → search → execute, projects, clipboard fallback, light/dark, login item, Sparkle, signing & notarization scripts
+- [x] JSON / Markdown import & export, with automatic backup before import
 - [ ] One-tap "repeat last entry"
-- [ ] JSON / Markdown import & export
 - [ ] Variable templates (`{{name}}` style) — only if it can be added without slowing the main link
 
 See [docs/路线图与贡献指南.md](docs/路线图与贡献指南.md) for prioritization rules, [CHANGELOG.md](CHANGELOG.md) for what's shipped, and [issues](https://github.com/tytsxai/PromptPanel/issues) for public planning.
@@ -346,7 +346,7 @@ Open an issue: <https://github.com/tytsxai/PromptPanel/issues>. Please use the t
 
 ### How do I import my existing prompts from another tool?
 
-Import is on the roadmap; for now you can write directly to the SQLite file or paste entries into the main window. PRs that add a clean importer for TextExpander / Espanso / Raycast format are very welcome.
+Use `Settings → Maintenance → Import JSON` for full PromptPanel library transfers, or `Import MD` for Markdown prompt collections. Imports automatically create a local database backup first. `Export JSON` is best for lossless migration; `Export MD` is best for reviewable sharing.
 
 ## Contributing
 
