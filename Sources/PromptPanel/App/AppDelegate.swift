@@ -124,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var pasteService: PasteService!
     private var loginItemService: LoginItemService!
     private var storageMaintenanceService: StorageMaintenanceService!
+    private var libraryTransferService: LibraryTransferService!
     private var updaterService: UpdaterService!
 
     private var executeService: ExecuteService!
@@ -263,6 +264,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             logRepository: logRepository,
             databaseURL: databaseManager.databaseURL
         )
+        libraryTransferService = LibraryTransferService(
+            projectRepository: projectRepository,
+            entryRepository: entryRepository,
+            storageMaintenanceService: storageMaintenanceService
+        )
 
         let initializedProjectRepository = projectRepository!
         let defaultProject = try initializedProjectRepository.fetchDefault()
@@ -351,6 +357,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             permissionService: permissionService,
             loginItemService: loginItemService,
             storageMaintenanceService: storageMaintenanceService,
+            libraryTransferService: libraryTransferService,
             updaterService: updaterService,
             launchRecoveryReport: databaseManager.launchRecoveryReport,
             onSetPanelPinned: { [weak self] isPinned in

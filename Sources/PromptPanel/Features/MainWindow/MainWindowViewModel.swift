@@ -156,6 +156,7 @@ final class MainWindowViewModel: ObservableObject {
     private let permissionService: PermissionService
     private let loginItemService: LoginItemService
     private let storageMaintenanceService: StorageMaintenanceService
+    private let libraryTransferService: LibraryTransferService
     private let updaterService: UpdaterService
     private let launchRecoveryReport: LaunchRecoveryReport?
     private let onSetPanelPinned: (Bool) -> Bool
@@ -176,6 +177,7 @@ final class MainWindowViewModel: ObservableObject {
         permissionService: PermissionService,
         loginItemService: LoginItemService,
         storageMaintenanceService: StorageMaintenanceService,
+        libraryTransferService: LibraryTransferService? = nil,
         updaterService: UpdaterService,
         launchRecoveryReport: LaunchRecoveryReport?,
         onSetPanelPinned: @escaping (Bool) -> Bool = { _ in false },
@@ -190,6 +192,11 @@ final class MainWindowViewModel: ObservableObject {
         self.permissionService = permissionService
         self.loginItemService = loginItemService
         self.storageMaintenanceService = storageMaintenanceService
+        self.libraryTransferService = libraryTransferService ?? LibraryTransferService(
+            projectRepository: projectRepository,
+            entryRepository: entryRepository,
+            storageMaintenanceService: storageMaintenanceService
+        )
         self.updaterService = updaterService
         self.launchRecoveryReport = launchRecoveryReport
         self.onSetPanelPinned = onSetPanelPinned
@@ -633,14 +640,86 @@ final class MainWindowViewModel: ObservableObject {
         }
     }
 
+    func exportLibraryAsJSON() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "导出词库 JSON"
+        savePanel.nameFieldStringValue = "PromptPanel-Library-\(fileTimestamp()).json"
+        savePanel.allowedContentTypes = [.json]
+        savePanel.canCreateDirectories = true
+
+        guard savePanel.runModal() == .OK, let destinationURL = savePanel.url else {
+            return
+        }
+
+        do {
+            let outputURL = try libraryTransferService.exportJSON(to: destinationURL)
+            bannerMessage = "词库 JSON 已保存：\(outputURL.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+        } catch {
+            PPLogger.app.error("Failed to export library JSON: \(error.localizedDescription)")
+            bannerMessage = "导出词库 JSON 失败：\(error.localizedDescription)"
+        }
+    }
+
+    func exportLibraryAsMarkdown() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "导出词库 Markdown"
+        savePanel.nameFieldStringValue = "PromptPanel-Library-\(fileTimestamp()).md"
+        savePanel.allowedContentTypes = [Self.markdownContentType]
+        savePanel.canCreateDirectories = true
+
+        guard savePanel.runModal() == .OK, let destinationURL = savePanel.url else {
+            return
+        }
+
+        do {
+            let outputURL = try libraryTransferService.exportMarkdown(to: destinationURL)
+            bannerMessage = "词库 Markdown 已保存：\(outputURL.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+        } catch {
+            PPLogger.app.error("Failed to export library Markdown: \(error.localizedDescription)")
+            bannerMessage = "导出词库 Markdown 失败：\(error.localizedDescription)"
+        }
+    }
+
+    func importLibraryFromJSON() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "导入词库 JSON"
+        openPanel.allowedContentTypes = [.json]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+
+        guard openPanel.runModal() == .OK, let sourceURL = openPanel.url else {
+            return
+        }
+
+        importLibrary {
+            try libraryTransferService.importJSON(from: sourceURL)
+        }
+    }
+
+    func importLibraryFromMarkdown() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "导入词库 Markdown"
+        openPanel.allowedContentTypes = [Self.markdownContentType, .plainText]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+
+        guard openPanel.runModal() == .OK, let sourceURL = openPanel.url else {
+            return
+        }
+
+        importLibrary {
+            try libraryTransferService.importMarkdown(from: sourceURL)
+        }
+    }
+
     /// Lets the user assemble and save a diagnostics zip (privacy-safe — no entry content).
     /// Shows an NSSavePanel for destination; on success reveals the resulting zip in Finder.
     func exportDiagnosticsBundle() {
         let savePanel = NSSavePanel()
         savePanel.title = "导出诊断包"
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        savePanel.nameFieldStringValue = "PromptPanel-Diagnostics-\(timestamp).zip"
+        savePanel.nameFieldStringValue = "PromptPanel-Diagnostics-\(fileTimestamp()).zip"
         savePanel.allowedContentTypes = [.zip]
         savePanel.canCreateDirectories = true
 
@@ -661,6 +740,30 @@ final class MainWindowViewModel: ObservableObject {
             PPLogger.app.error("Failed to export diagnostics bundle: \(error.localizedDescription)")
             bannerMessage = error.localizedDescription
         }
+    }
+
+    private func importLibrary(_ action: () throws -> LibraryTransferSummary) {
+        do {
+            let summary = try action()
+            loadProjects()
+            refreshProjectEntryCounts()
+            scheduleEntriesRefresh(delayMs: 0)
+            refreshOperationalStatus()
+            let backupName = summary.backupURL?.lastPathComponent ?? "未生成备份"
+            bannerMessage = "导入完成：项目 +\(summary.projectsCreated)/更新 \(summary.projectsUpdated)，词条 +\(summary.entriesCreated)/更新 \(summary.entriesUpdated)。导入前备份：\(backupName)"
+        } catch {
+            PPLogger.app.error("Failed to import library: \(error.localizedDescription)")
+            bannerMessage = "导入词库失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func fileTimestamp() -> String {
+        ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+    }
+
+    private static var markdownContentType: UTType {
+        UTType(filenameExtension: "md") ?? .plainText
     }
 
     func openDataDirectory() {

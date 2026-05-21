@@ -893,6 +893,18 @@ private struct MaintenanceSection: View {
                 SettingsPillButton("备份目录", systemImage: "tray.full", fillsAvailableWidth: true) {
                     viewModel.openBackupDirectory()
                 }
+                SettingsPillButton("导出 JSON", systemImage: "square.and.arrow.up", fillsAvailableWidth: true) {
+                    viewModel.exportLibraryAsJSON()
+                }
+                SettingsPillButton("导出 MD", systemImage: "doc.text", fillsAvailableWidth: true) {
+                    viewModel.exportLibraryAsMarkdown()
+                }
+                SettingsPillButton("导入 JSON", systemImage: "square.and.arrow.down", tone: .primary, fillsAvailableWidth: true) {
+                    viewModel.importLibraryFromJSON()
+                }
+                SettingsPillButton("导入 MD", systemImage: "doc.text.fill", fillsAvailableWidth: true) {
+                    viewModel.importLibraryFromMarkdown()
+                }
                 SettingsPillButton("导出诊断", systemImage: "doc.zipper", fillsAvailableWidth: true) {
                     viewModel.exportDiagnosticsBundle()
                 }
@@ -902,7 +914,7 @@ private struct MaintenanceSection: View {
             }
             .padding(.vertical, 4)
 
-            Text("Sparkle 只在 feed 和公钥都配置完成后启用；其余情况下沿用本地打包与备份恢复链路。")
+            Text("导入词库前会自动创建本地数据库备份；Sparkle 只在 feed 和公钥都配置完成后启用。")
                 .font(.system(size: 11))
                 .foregroundStyle(Constants.VisualStyle.textTertiary)
                 .padding(.top, 4)

@@ -1655,6 +1655,125 @@ final class PromptPanelTests: XCTestCase {
         XCTAssertNotNil(summary.latestFailureAt)
     }
 
+    func testLibraryJSONExportImportRoundTripsProjectsAndEntries() throws {
+        let sourceDatabase = try makeDatabaseManager()
+        let sourceProjects = ProjectRepository(dbQueue: sourceDatabase.dbQueue)
+        let sourceEntries = EntryRepository(dbQueue: sourceDatabase.dbQueue)
+        let sourceLogs = LogRepository(dbQueue: sourceDatabase.dbQueue)
+        let sourceMaintenance = StorageMaintenanceService(
+            dbQueue: sourceDatabase.dbQueue,
+            logRepository: sourceLogs,
+            databaseURL: sourceDatabase.databaseURL
+        )
+        let project = Project(id: "project-json", name: "JSON Project")
+        let entry = Entry(
+            id: "entry-json",
+            projectId: project.id,
+            title: "JSON Prompt",
+            content: "Write a release note.",
+            isPinned: true,
+            useCount: 7,
+            tags: ["release", "notes"]
+        )
+        try sourceProjects.create(project)
+        try sourceEntries.create(entry)
+
+        let exportURL = try makeTemporaryDatabaseURL()
+            .deletingLastPathComponent()
+            .appendingPathComponent("library.json")
+        let sourceService = LibraryTransferService(
+            projectRepository: sourceProjects,
+            entryRepository: sourceEntries,
+            storageMaintenanceService: sourceMaintenance
+        )
+        try sourceService.exportJSON(to: exportURL)
+
+        let targetDatabase = try makeDatabaseManager()
+        let targetProjects = ProjectRepository(dbQueue: targetDatabase.dbQueue)
+        let targetEntries = EntryRepository(dbQueue: targetDatabase.dbQueue)
+        let targetLogs = LogRepository(dbQueue: targetDatabase.dbQueue)
+        let targetMaintenance = StorageMaintenanceService(
+            dbQueue: targetDatabase.dbQueue,
+            logRepository: targetLogs,
+            databaseURL: targetDatabase.databaseURL
+        )
+        let targetService = LibraryTransferService(
+            projectRepository: targetProjects,
+            entryRepository: targetEntries,
+            storageMaintenanceService: targetMaintenance
+        )
+
+        let summary = try targetService.importJSON(from: exportURL)
+        let importedProject = try XCTUnwrap(targetProjects.fetchById(project.id))
+        let importedEntry = try XCTUnwrap(targetEntries.fetchById(entry.id))
+
+        XCTAssertEqual(summary.projectsCreated, 1)
+        XCTAssertEqual(summary.entriesCreated, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(summary.backupURL).path))
+        XCTAssertEqual(importedProject.name, project.name)
+        XCTAssertEqual(importedEntry.title, entry.title)
+        XCTAssertEqual(importedEntry.projectId, project.id)
+        XCTAssertEqual(importedEntry.tags, ["release", "notes"])
+    }
+
+    func testLibraryMarkdownExportImportRoundTripsPromptContent() throws {
+        let sourceDatabase = try makeDatabaseManager()
+        let sourceProjects = ProjectRepository(dbQueue: sourceDatabase.dbQueue)
+        let sourceEntries = EntryRepository(dbQueue: sourceDatabase.dbQueue)
+        let sourceLogs = LogRepository(dbQueue: sourceDatabase.dbQueue)
+        let sourceMaintenance = StorageMaintenanceService(
+            dbQueue: sourceDatabase.dbQueue,
+            logRepository: sourceLogs,
+            databaseURL: sourceDatabase.databaseURL
+        )
+        let project = Project(id: "project-markdown", name: "Markdown Project")
+        let entry = Entry(
+            id: "entry-markdown",
+            projectId: project.id,
+            title: "Markdown Prompt",
+            content: "Keep this code fence:\n```swift\nprint(\"ok\")\n```",
+            type: Constants.EntryType.template.rawValue,
+            tags: ["markdown"]
+        )
+        try sourceProjects.create(project)
+        try sourceEntries.create(entry)
+
+        let exportURL = try makeTemporaryDatabaseURL()
+            .deletingLastPathComponent()
+            .appendingPathComponent("library.md")
+        let sourceService = LibraryTransferService(
+            projectRepository: sourceProjects,
+            entryRepository: sourceEntries,
+            storageMaintenanceService: sourceMaintenance
+        )
+        try sourceService.exportMarkdown(to: exportURL)
+
+        let targetDatabase = try makeDatabaseManager()
+        let targetProjects = ProjectRepository(dbQueue: targetDatabase.dbQueue)
+        let targetEntries = EntryRepository(dbQueue: targetDatabase.dbQueue)
+        let targetLogs = LogRepository(dbQueue: targetDatabase.dbQueue)
+        let targetMaintenance = StorageMaintenanceService(
+            dbQueue: targetDatabase.dbQueue,
+            logRepository: targetLogs,
+            databaseURL: targetDatabase.databaseURL
+        )
+        let targetService = LibraryTransferService(
+            projectRepository: targetProjects,
+            entryRepository: targetEntries,
+            storageMaintenanceService: targetMaintenance
+        )
+
+        let summary = try targetService.importMarkdown(from: exportURL)
+        let importedEntry = try XCTUnwrap(targetEntries.fetchById(entry.id))
+
+        XCTAssertEqual(summary.projectsCreated, 1)
+        XCTAssertEqual(summary.entriesCreated, 1)
+        XCTAssertEqual(try XCTUnwrap(targetProjects.fetchById(project.id)).name, project.name)
+        XCTAssertEqual(importedEntry.content, entry.content)
+        XCTAssertEqual(importedEntry.type, Constants.EntryType.template.rawValue)
+        XCTAssertEqual(importedEntry.tags, ["markdown"])
+    }
+
     func testReleaseReadinessBuildOnlyModeDoesNotRequireTestRunner() throws {
         let script = try readRepositoryText("scripts/release-readiness.sh")
 
